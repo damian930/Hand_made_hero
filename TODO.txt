@@ -1,0 +1,39 @@
+=== Some code stuff
+-- Remove "pragma once" and use some ifdefs for header includes
+
+=== Platform
+-- Compile the game code into a dll and reload when compiled for eaiser usage
+
+=== Game
+-- Start having the map be generated using a hash map or something
+-- Start basing stuf from the miffle like minecraft insted of the left lower corner
+-- Add couple of hard coded entities
+
+-- KINDA (it doesnt stick no more, but it doesnt slide for some reason) | Change the direction of vectors when colliding with tiles to remove the sticking problem
+-- Start having entities (walls for example)
+-- Introduce gravity, need a player to fall
+
+===
+-- Need a better way to store coordinate on the map
+-- Colision is bad sometimes now, GJK sometimes fucks up
+
+=== Current Goal
+
+|============ THIS IS FOR AUGUST 26 ===========|
+|-- preciese map drawing                       |
+|-- fix collision detenction                   |
+|-- entity_high, low                           |
+|-- CASEY Rel variable for collision detection |
+|-- JUST STEP THROUGHT THE WHOLE GAME_UPDATE F.|
+|==============================================|
+
+-- High frequency region and low, some like that
+-- Position based storage of entites per chunk
+-- Start using entities insted of tiles
+
+
+
+
+
+
+
