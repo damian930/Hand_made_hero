@@ -1,7 +1,6 @@
-.vscode
-misc
-build
-.gitignore
+.vscode/
+misc/
+build/
 
 
 
