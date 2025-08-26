@@ -179,11 +179,12 @@ Entity get_entity(World* world, U32 entity_idx) {
     return result;
 }
 
-void spawn_wall(World* world, Camera* camera, World_pos wall_pos, F32 wall_width, F32 wall_height) {
+void spawn_tree(World* world, Camera* camera, World_pos wall_pos, F32 wall_width, F32 wall_height) {
     // Chunk* chunk = get_chunk_in_world(arena, world, pos.chunk);
     Assert(world->entity_count + 1 < world->entity_max_count);
     
     Low_entity low = {};
+    low.type = Entity_type::Tree;
     low.width = wall_width;
     low.height = wall_height;
     low.speed = vec2_f32(0.0f, 0.0f);

@@ -189,15 +189,15 @@ file_private void draw_black_screen(Game_state* game_state, Bitmap* bitmap)
             U32* pixel = row_start + x;
             U8* byte = (U8*) pixel;
             // Blue
-            *byte = 0;
+            *byte = 100;
             byte += 1;
             
             // Green
-            *byte = 0;
+            *byte = 100;
             byte += 1;
 
             // Red
-            *byte = 0;
+            *byte = 100;
             byte += 1;
 
             // Padding / Alpa
@@ -346,7 +346,7 @@ void game_update(Bitmap* bitmap,
                 }
 
                 if ((is_vert_wall || is_hor_wall) && (!is_door)) {
-                    spawn_wall(world, camera, wall_spawn_pos, world->tile_side_in_m, world->tile_side_in_m);
+                    spawn_tree(world, camera, wall_spawn_pos, world->tile_side_in_m, world->tile_side_in_m);
                 }
 
             }
@@ -369,7 +369,7 @@ void game_update(Bitmap* bitmap,
         game_state->player_skin_right.torso = load_bmp_file(&game_state->arena, platform_things->read_file_fp, "..\\art\\hand_made_01\\test_hero_right_torso.bmp");
 
         game_state->player_shadow = load_bmp_file(&game_state->arena, platform_things->read_file_fp, "..\\art\\hand_made_01\\test_hero_shadow.bmp");
-        
+        game_state->tree_00 = load_bmp_file(&game_state->arena, platform_things->read_file_fp, "..\\art\\hand_made_01\\tree00.bmp");
         game_state->backdrop = load_bmp_file(&game_state->arena, platform_things->read_file_fp, "..\\art\\hand_made_01\\test_background.bmp");
     }
 
@@ -454,21 +454,20 @@ void game_update(Bitmap* bitmap,
     {
         
         // Some constant used for drawing
-        Vec2_F32 screen_offset = vec2_f32(200.0f, 30.0f);
+        Vec2_F32 screen_offset = vec2_f32(200.0f, 150.0f);
         World_pos player_world_pos = world_pos_from_camera_rel(world, camera, player->camera_rel);
         
         //draw_some_shit(game_state, bitmap);
         draw_black_screen(game_state, bitmap);
-        draw_bitmap(game_state->backdrop, 
-                    bitmap, 
-                    -screen_offset.x, -screen_offset.y);
 
     #if 1
         // Draw the map (Entities on the map)
         {   
             // TODO: draw entities better. If an entity is only partly inside a chunk, then draw the part
             //       also check neighboring chunks to see if there are entites that have parts of them on the current chunk
-             
+
+            Vec2_F32 tree_00_offset = vec2_f32(40.0f, 83.0f);
+
             for (U32 entity_idx = 0; 
                  entity_idx < world->entity_count; 
                  entity_idx += 1
@@ -493,10 +492,18 @@ void game_update(Bitmap* bitmap,
                     F32 entity_min_y = entity_max_y - 
                                        (entity_h * game_state->px_per_m);
 
-                    draw_rect(bitmap, 
-                        entity_min_x, entity_min_y, 
-                        entity_max_x, entity_max_y, 
-                        100, 100, 100);             
+                    switch (entity.low->type) {
+                        case Entity_type::Tree: {
+                            draw_bitmap(game_state->tree_00, bitmap, 
+                                entity_min_x, entity_min_y,
+                                tree_00_offset.x, tree_00_offset.y
+                            );
+                        } break;
+
+                        default: {
+                            InvalidCodePath;
+                        } break;
+                    }
                 }
 
             }

@@ -24,7 +24,7 @@ PlatformSpecificReadfileF(DEBUG_win32_read_file) {
                                      GENERIC_READ | GENERIC_WRITE,
                                      0, 
                                      NULL,
-                                     OPEN_ALWAYS,    
+                                     OPEN_EXISTING,    
                                      FILE_ATTRIBUTE_NORMAL,
                                      NULL);
     if (file_handle != INVALID_HANDLE_VALUE)

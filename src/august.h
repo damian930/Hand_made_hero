@@ -60,6 +60,7 @@ struct Game_state {
     Player_skin player_skin_right;
 
     Loaded_bitmap player_shadow;
+    Loaded_bitmap tree_00;
     Loaded_bitmap backdrop;
 };
 // ================================================================

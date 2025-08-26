@@ -1,6 +1,7 @@
 .vscode
-.misc
-.build/*
+misc
+build
+.gitignore
 
 
 

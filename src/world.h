@@ -23,14 +23,19 @@ namespaced_enum Entity_direction : U32 {
     Left,
 };
 
-namespaced_enum Entity_type : U32 {
+namespaced_enum Entity_update_frequency : U32 {
     Low,
     Low_High,
+};
+
+namespaced_enum Entity_type : U32 {
+    Tree,
 };
 
 struct Low_entity {
     B32 is_also_high;
 
+    Entity_type type;
     World_pos world_pos; // NOTE: this is the pos of the middle of an entity
     Vec2_F32 speed;
     F32 width;
@@ -53,6 +58,9 @@ struct Chunk {
     Chunk* next;
 
     Vec2_S32 chunk_pos;
+
+    // TODO: remove this
+    U32* tiles;
 };
 
 struct Chunk_list {
@@ -72,7 +80,7 @@ struct World {
 
     U32 entity_count;
     U32 entity_max_count;
-    Entity_type entity_types[256];
+    Entity_update_frequency entity_types[256];
     Low_entity low_entities[256];
     High_entity high_entities[256];
 };
