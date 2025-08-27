@@ -1,4 +1,5 @@
-#pragma once
+#ifndef BASE_H
+#define BASE_H
 
 #include <stdint.h>
 
@@ -71,7 +72,7 @@ void* arena_push(Arena* arena, U32 size) {
 
 // == Arrays
 // NOTE: this is here for now
-#define SizeOfArr(arr) (sizeof(arr) / sizeof(arr[0]))
+#define ArrayCount(arr) (sizeof(arr) / sizeof(arr[0]))
 
 // TODO: think about this, maybe use arena insted of stack for these arrays, like ryan, so no need for arr[size] needed. Some like that....
 #define DefineArrayType(type, name) struct name { \
@@ -92,13 +93,4 @@ void* arena_push(Arena* arena, U32 size) {
 
 
 
-
-
-
-
-
-
-
-
-
-
+#endif

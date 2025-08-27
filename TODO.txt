@@ -19,18 +19,16 @@
 
 === Current Goal
 
-|============ THIS IS FOR AUGUST 26 ===========|
-|-- preciese map drawing                       |
-|-- fix collision detenction                   |
-|-- entity_high, low                           |
-|-- CASEY Rel variable for collision detection |
-|-- JUST STEP THROUGHT THE WHOLE GAME_UPDATE F.|
-|==============================================|
-
 -- High frequency region and low, some like that
 -- Position based storage of entites per chunk
 -- Start using entities insted of tiles
 
+=== Ideas
+-- Have a sym_region be a region that gets simulated based on something, for example a player. 
+   Have a camera region be similar to sym_region but it will be used for drawing, 
+   it then can be aplyid to different entities i guess.
+   Both of them can have a similar scheme for local F32 type storage and them World_pos for global pos of reference
+   
 
 
 

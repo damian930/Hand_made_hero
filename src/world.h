@@ -1,8 +1,8 @@
-#pragma once
+#ifndef WORLD_H
+#define WORLD_H
 
 #include "base.h"
 #include "math.h"
-
 
 // TODO: Dont know how i feel about this.
 // This was dont to not have B32 is_initialised inside Chunk,
@@ -34,6 +34,7 @@ namespaced_enum Entity_type : U32 {
 
 struct Low_entity {
     B32 is_also_high;
+    U32 high_idx;
 
     Entity_type type;
     World_pos world_pos; // NOTE: this is the pos of the middle of an entity
@@ -44,29 +45,42 @@ struct Low_entity {
 
 // NOTE: these are camera_pos relative 
 struct High_entity {
+    U32 low_index;
+
     Vec2_F32 camera_rel_pos; // NOTE: this is the position of the middle of an entity
-    
     Entity_direction direction;
 };
 
+#if 0
 struct Entity {
     Low_entity* low;
     High_entity* high;
 };
+#endif
+
+struct Entity_block {
+    Low_entity low_entities[4]; // TODO: make this value better (the size of the array)
+    U32 low_entity_count;
+    
+    Entity_block* next_block;
+};
 
 struct Chunk {
-    Chunk* next;
+    Chunk* next_in_hash;
 
     Vec2_S32 chunk_pos;
-
-    // TODO: remove this
-    U32* tiles;
+    Entity_block entity_block;
 };
 
 struct Chunk_list {
+    // NOTE: This boolean here is just to know if data has not yet been initialised
+    // TODO: THink of a better scheme for this, i dont like a boolean here
     B32 is_initialised;
     Chunk* chunk;
 };
+
+// THINGS_TO_IMPLEMENT: 
+// -- Some way to reference then from outer position isnide the world
 
 struct World {
     U32 chunk_side_in_tiles;
@@ -77,12 +91,9 @@ struct World {
     Vec2_S32 mid_chunk;
 
     Chunk_list chunk_lists[1024];
-
-    U32 entity_count;
-    U32 entity_max_count;
-    Entity_update_frequency entity_types[256];
-    Low_entity low_entities[256];
-    High_entity high_entities[256];
+    
+    High_entity high_entities[128]; 
+    U32 high_entity_count;
 };
 
 
@@ -92,12 +103,7 @@ struct World {
 
 
 
-
-
-
-
-
-
+#endif 
 
 
 

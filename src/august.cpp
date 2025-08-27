@@ -279,6 +279,7 @@ void game_update(Bitmap* bitmap,
                  Some_more_platform_things_to_use* platform_things,
                  F32 time_elapsed
 ) {
+
 #if 0
     // These are for some simple DEBUG of performance based on time
     F32 frame_start_time = platform_things->frame_start_time;
@@ -312,8 +313,7 @@ void game_update(Bitmap* bitmap,
         world->chunk_safe_margin_from_middle_chunk = WORLD_SAFE_MARGIN_IN_CHUNKS;
         world->mid_chunk = vec2_s32(WORLD_START_CHUNK_POS, WORLD_START_CHUNK_POS);
         
-        world->entity_count = 0;
-        world->entity_max_count = SizeOfArr(world->low_entities);
+        world->high_entity_count = 0;
         
         game_state->camera.world_pos.chunk     = vec2_s32(0, 0);
         game_state->camera.world_pos.chunk_rel = vec2_f32(0.0f, 0.0f);
@@ -325,15 +325,15 @@ void game_update(Bitmap* bitmap,
         game_state->player.width      = 1.95f;
         game_state->player.height     = 0.55f;
         game_state->player.direction  = Entity_direction::Back;
+        Player* player = &game_state->player;
 
         // Spawing a bit
-        Chunk* chunk = get_chunk_in_world(&game_state->arena, world, vec2_s32(0, 0));
         for (S32 tile_y = 0; tile_y < world->chunk_side_in_tiles; tile_y += 1)
         {
             for (S32 tile_x = 0; tile_x < world->chunk_side_in_tiles; tile_x += 1)
             {
                 World_pos wall_spawn_pos = {}; 
-                wall_spawn_pos.chunk = chunk->chunk_pos;
+                wall_spawn_pos.chunk = vec2_s32(0, 0);
                 wall_spawn_pos.chunk_rel = world->tile_side_in_m * vec2_f32(tile_x, tile_y);
 
                 B32 is_vert_wall = ((tile_x == 0) || (tile_x == (world->chunk_side_in_tiles - 1)));
@@ -346,11 +346,14 @@ void game_update(Bitmap* bitmap,
                 }
 
                 if ((is_vert_wall || is_hor_wall) && (!is_door)) {
-                    spawn_tree(world, camera, wall_spawn_pos, world->tile_side_in_m, world->tile_side_in_m);
+                    spawn_tree(&game_state->arena, world, camera, 
+                        wall_spawn_pos);
                 }
 
             }
         }
+
+        fix_camera_world_invariant(&game_state->arena, world, camera, player);
 
         game_state->player_skin_front.head = load_bmp_file(&game_state->arena, platform_things->read_file_fp, "..\\art\\hand_made_01\\test_hero_front_head.bmp");
         game_state->player_skin_front.cape = load_bmp_file(&game_state->arena, platform_things->read_file_fp, "..\\art\\hand_made_01\\test_hero_front_cape.bmp");
@@ -444,7 +447,7 @@ void game_update(Bitmap* bitmap,
 
     // Getting phisics done on the player
     move_player(
-        world, player, camera, 
+        &game_state->arena, world, player, camera, 
         time_elapsed,
         acceleration_unit_vec);
         // game_state->background_offset += 0.1f;
@@ -468,31 +471,39 @@ void game_update(Bitmap* bitmap,
 
             Vec2_F32 tree_00_offset = vec2_f32(40.0f, 83.0f);
 
-            for (U32 entity_idx = 0; 
-                 entity_idx < world->entity_count; 
-                 entity_idx += 1
+            Entity_block* first_block = get_entity_block__asserts(world, player_world_pos.chunk);
+            for (Entity_block* block_it = first_block;
+                 block_it != 0;
+                 block_it = block_it->next_block
             ) {
-                Entity entity = get_entity(world, entity_idx);
-                if (entity.low->world_pos.chunk == player_world_pos.chunk)
-                {
-                    Vec2_F32 entity_chunk_pos = entity.low->world_pos.chunk_rel;
-                    F32 entity_w = entity.low->width;
-                    F32 entity_h = entity.low->height;
+                for (U32 low_idx = 0;
+                     low_idx < block_it->low_entity_count;
+                     low_idx += 1
+                ) {
+                    Low_entity* low = &block_it->low_entities[low_idx];
+                    Assert(low->is_also_high);
+
+                    // NOTE: this is here for assert, but not yet used, since drawing is dumb
+                    High_entity* high = &world->high_entities[low->high_idx];
+                
+                    Vec2_F32 entity_chunk_pos = low->world_pos.chunk_rel;
+                    F32 entity_w = low->width;
+                    F32 entity_h = low->height;
 
                     F32 entity_min_x = screen_offset.x + 
                                        (entity_chunk_pos.x * game_state->px_per_m) -
-                                       (entity.low->width / 2 * game_state->px_per_m);
+                                       (low->width / 2 * game_state->px_per_m);
                     F32 entity_max_x = entity_min_x + 
                                        (entity_w * game_state->px_per_m);
 
                     F32 entity_max_y = screen_offset.y + 
                                        (world->chunk_side_in_m * game_state->px_per_m) - 
                                        (entity_chunk_pos.y * game_state->px_per_m) + 
-                                       (entity.low->height / 2 * game_state->px_per_m);
+                                       (low->height / 2 * game_state->px_per_m);
                     F32 entity_min_y = entity_max_y - 
                                        (entity_h * game_state->px_per_m);
 
-                    switch (entity.low->type) {
+                    switch (low->type) {
                         case Entity_type::Tree: {
                             draw_bitmap(game_state->tree_00, bitmap, 
                                 entity_min_x, entity_min_y,
@@ -503,162 +514,162 @@ void game_update(Bitmap* bitmap,
                         default: {
                             InvalidCodePath;
                         } break;
+
                     }
                 }
 
             }
-
-        }
-    #endif
+        #endif
         // TODO: fix this, this doesnt draw if the player is outside of the box of the ga
             
-    #if 0
-        // Draw the tiles that player is currenly in
-        {    
-            World_pos player_base_min_pos = player->base_pos;
-            player_base_min_pos.tile_rel -= (0.5f * vec2_f32(player->width, player->height));
-            player_base_min_pos = recanonicalize_world_pos(world, player_base_min_pos);
+        #if 0
+            // Draw the tiles that player is currenly in
+            {    
+                World_pos player_base_min_pos = player->base_pos;
+                player_base_min_pos.tile_rel -= (0.5f * vec2_f32(player->width, player->height));
+                player_base_min_pos = recanonicalize_world_pos(world, player_base_min_pos);
 
-            World_pos player_base_max_pos = player->base_pos;
-            player_base_max_pos.tile_rel += (0.5f * vec2_f32(player->width, player->height));
-            player_base_max_pos = recanonicalize_world_pos(world, player_base_max_pos);
+                World_pos player_base_max_pos = player->base_pos;
+                player_base_max_pos.tile_rel += (0.5f * vec2_f32(player->width, player->height));
+                player_base_max_pos = recanonicalize_world_pos(world, player_base_max_pos);
 
-            S32 min_tile_x = player->base_pos.tile.x;
-            S32 min_tile_y = player->base_pos.tile.y;
-            S32 max_tile_x = player->base_pos.tile.x;
-            S32 max_tile_y = player->base_pos.tile.y;
+                S32 min_tile_x = player->base_pos.tile.x;
+                S32 min_tile_y = player->base_pos.tile.y;
+                S32 max_tile_x = player->base_pos.tile.x;
+                S32 max_tile_y = player->base_pos.tile.y;
 
-            // TODO: create a func that chooses a min world position out of 2 give.
-            //       store the min max positions
-            //       use tile and chunk positions, subtract them from the mid point of the camera (player_base).
-            //       see if these new offsets are withing the bounds of tile rectangle we draw
-            //       if yes, then draw the tile, else its out of the part of the map that we draw, so draw
+                // TODO: create a func that chooses a min world position out of 2 give.
+                //       store the min max positions
+                //       use tile and chunk positions, subtract them from the mid point of the camera (player_base).
+                //       see if these new offsets are withing the bounds of tile rectangle we draw
+                //       if yes, then draw the tile, else its out of the part of the map that we draw, so draw
 
-            if (player_base_min_pos.chunk == player->base_pos.chunk) {
-                min_tile_x = Min(min_tile_x, player_base_min_pos.tile.x);
-                min_tile_y = Min(min_tile_y, player_base_min_pos.tile.y);
-            }
-            if (player_base_max_pos.chunk == player->base_pos.chunk) {
-                max_tile_x = Max(max_tile_x, player_base_max_pos.tile.x);
-                max_tile_y = Max(max_tile_y, player_base_max_pos.tile.y);
-            }
-
-            for (S32 tile_x = min_tile_x; tile_x <= max_tile_x; tile_x += 1) {
-                for (S32 tile_y = min_tile_y; tile_y <= max_tile_y; tile_y += 1) {
-                    F32 tile_start_x = screen_offset.x + (tile_x * world->tile_side_in_m * game_state->px_per_m);
-                    F32 tile_end_x   = tile_start_x + (world->tile_side_in_m * game_state->px_per_m);
-                    
-                    F32 tile_end_y   = screen_offset.y + (world->chunk_side_in_tiles * world->tile_side_in_m * game_state->px_per_m) - (tile_y * world->tile_side_in_m * game_state->px_per_m);
-                    F32 tile_start_y = tile_end_y - (world->tile_side_in_m * game_state->px_per_m);
-
-                    draw_rect(bitmap, 
-                        tile_start_x, tile_start_y, 
-                        tile_end_x, tile_end_y,
-                        0, 0, 0);
+                if (player_base_min_pos.chunk == player->base_pos.chunk) {
+                    min_tile_x = Min(min_tile_x, player_base_min_pos.tile.x);
+                    min_tile_y = Min(min_tile_y, player_base_min_pos.tile.y);
                 }
+                if (player_base_max_pos.chunk == player->base_pos.chunk) {
+                    max_tile_x = Max(max_tile_x, player_base_max_pos.tile.x);
+                    max_tile_y = Max(max_tile_y, player_base_max_pos.tile.y);
+                }
+
+                for (S32 tile_x = min_tile_x; tile_x <= max_tile_x; tile_x += 1) {
+                    for (S32 tile_y = min_tile_y; tile_y <= max_tile_y; tile_y += 1) {
+                        F32 tile_start_x = screen_offset.x + (tile_x * world->tile_side_in_m * game_state->px_per_m);
+                        F32 tile_end_x   = tile_start_x + (world->tile_side_in_m * game_state->px_per_m);
+                        
+                        F32 tile_end_y   = screen_offset.y + (world->chunk_side_in_tiles * world->tile_side_in_m * game_state->px_per_m) - (tile_y * world->tile_side_in_m * game_state->px_per_m);
+                        F32 tile_start_y = tile_end_y - (world->tile_side_in_m * game_state->px_per_m);
+
+                        draw_rect(bitmap, 
+                            tile_start_x, tile_start_y, 
+                            tile_end_x, tile_end_y,
+                            0, 0, 0);
+                    }
+                }
+
             }
+        #endif
 
-        }
-    #endif
+        #if 0
+            // Draw the player as as rect
+            {
+                F32 min_x = screen_offset.x + 
+                            (player_world_pos.chunk_rel.x * game_state->px_per_m) - 
+                            (player->width / 2 * game_state->px_per_m);
+                F32 max_x = min_x + (player->width * game_state->px_per_m);
 
-    #if 0
-        // Draw the player as as rect
-        {
-            F32 min_x = screen_offset.x + 
-                        (player_world_pos.chunk_rel.x * game_state->px_per_m) - 
-                        (player->width / 2 * game_state->px_per_m);
-            F32 max_x = min_x + (player->width * game_state->px_per_m);
+                F32 max_y = screen_offset.y +
+                            (world->chunk_side_in_m * game_state->px_per_m) -
+                            (player_world_pos.chunk_rel.y * game_state->px_per_m) + 
+                            (player->height / 2 * game_state->px_per_m);
+                F32 min_y = max_y - (player->height * game_state->px_per_m);
 
-            F32 max_y = screen_offset.y +
-                        (world->chunk_side_in_m * game_state->px_per_m) -
-                        (player_world_pos.chunk_rel.y * game_state->px_per_m) + 
-                        (player->height / 2 * game_state->px_per_m);
-            F32 min_y = max_y - (player->height * game_state->px_per_m);
-
-            draw_rect(bitmap, 
-                min_x, min_y, 
-                max_x, max_y,
-                0, 200, 20);
-        }
-    #endif
-
-    #if 1
-        // Draw the players sprite + shadow
-        {
-            Vec2_F32 hero_sprite_offset = vec2_f32(72.0f, 182.0f);
-            Vec2_F32 shadow_offset = hero_sprite_offset;
-
-            F32 mid_legs_on_screen_x = screen_offset.x + 
-                                       (player_world_pos.chunk_rel.x  * game_state->px_per_m);
-            F32 mid_legs_on_screen_y = screen_offset.y + 
-                                       (world->chunk_side_in_m * game_state->px_per_m) - 
-                                       (player_world_pos.chunk_rel.y * game_state->px_per_m);
-
-            Player_skin* skin;
-            switch (game_state->player.direction) {
-                case Entity_direction::Back: {
-                    skin = &game_state->player_skin_back; 
-                } break;
-
-                case Entity_direction::Right: {
-                    skin = &game_state->player_skin_right; 
-                } break;
-
-                case Entity_direction::Front: {
-                    skin = &game_state->player_skin_front; 
-                } break;
-
-                case Entity_direction::Left: {
-                    skin = &game_state->player_skin_left; 
-                } break;
-
-                default: {
-                    InvalidCodePath;
-                } break;
+                draw_rect(bitmap, 
+                    min_x, min_y, 
+                    max_x, max_y,
+                    0, 200, 20);
             }
-            
-            draw_bitmap(game_state->player_shadow, 
-                bitmap, 
-                mid_legs_on_screen_x, mid_legs_on_screen_y,
-                shadow_offset.x, shadow_offset.y); 
-            draw_bitmap(skin->torso, 
-                bitmap, 
-                mid_legs_on_screen_x, mid_legs_on_screen_y,
-                hero_sprite_offset.x, hero_sprite_offset.y); 
-            draw_bitmap(skin->cape, 
-                bitmap, 
-                mid_legs_on_screen_x, mid_legs_on_screen_y,
-                hero_sprite_offset.x, hero_sprite_offset.y);
-            draw_bitmap(skin->head, 
-                bitmap, 
-                mid_legs_on_screen_x, mid_legs_on_screen_y,
-                hero_sprite_offset.x, hero_sprite_offset.y);
-            
-            draw_rect(bitmap,
-                mid_legs_on_screen_x, mid_legs_on_screen_y,
-                mid_legs_on_screen_x, mid_legs_on_screen_y,
-                0, 255, 0);
+        #endif
 
-        }
-    #endif
+        #if 1
+            // Draw the players sprite + shadow
+            {
+                Vec2_F32 hero_sprite_offset = vec2_f32(72.0f, 182.0f);
+                Vec2_F32 shadow_offset = hero_sprite_offset;
 
-    #if 0
-        // Draw the base point of the player
-        {
-            F32 player_base_on_screen_x = screen_offset.x + 
-                                          (player_world_pos.chunk_rel.x * game_state->px_per_m);
-            F32 player_base_on_screen_y = screen_offset.y + 
-                                          (world->chunk_side_in_m * game_state->px_per_m) - 
-                                          (player_world_pos.chunk_rel.y * game_state->px_per_m);
-            draw_rect(bitmap, 
-                player_base_on_screen_x, player_base_on_screen_y,
-                player_base_on_screen_x + 3, player_base_on_screen_y + 3,
-                255, 0, 0); 
-        } 
-    #endif
+                F32 mid_legs_on_screen_x = screen_offset.x + 
+                                        (player_world_pos.chunk_rel.x  * game_state->px_per_m);
+                F32 mid_legs_on_screen_y = screen_offset.y + 
+                                        (world->chunk_side_in_m * game_state->px_per_m) - 
+                                        (player_world_pos.chunk_rel.y * game_state->px_per_m);
+
+                Player_skin* skin;
+                switch (game_state->player.direction) {
+                    case Entity_direction::Back: {
+                        skin = &game_state->player_skin_back; 
+                    } break;
+
+                    case Entity_direction::Right: {
+                        skin = &game_state->player_skin_right; 
+                    } break;
+
+                    case Entity_direction::Front: {
+                        skin = &game_state->player_skin_front; 
+                    } break;
+
+                    case Entity_direction::Left: {
+                        skin = &game_state->player_skin_left; 
+                    } break;
+
+                    default: {
+                        InvalidCodePath;
+                    } break;
+                }
                 
+                draw_bitmap(game_state->player_shadow, 
+                    bitmap, 
+                    mid_legs_on_screen_x, mid_legs_on_screen_y,
+                    shadow_offset.x, shadow_offset.y); 
+                draw_bitmap(skin->torso, 
+                    bitmap, 
+                    mid_legs_on_screen_x, mid_legs_on_screen_y,
+                    hero_sprite_offset.x, hero_sprite_offset.y); 
+                draw_bitmap(skin->cape, 
+                    bitmap, 
+                    mid_legs_on_screen_x, mid_legs_on_screen_y,
+                    hero_sprite_offset.x, hero_sprite_offset.y);
+                draw_bitmap(skin->head, 
+                    bitmap, 
+                    mid_legs_on_screen_x, mid_legs_on_screen_y,
+                    hero_sprite_offset.x, hero_sprite_offset.y);
+                
+                draw_rect(bitmap,
+                    mid_legs_on_screen_x, mid_legs_on_screen_y,
+                    mid_legs_on_screen_x, mid_legs_on_screen_y,
+                    0, 255, 0);
+
+            }
+        #endif
+
+        #if 0
+            // Draw the base point of the player
+            {
+                F32 player_base_on_screen_x = screen_offset.x + 
+                                            (player_world_pos.chunk_rel.x * game_state->px_per_m);
+                F32 player_base_on_screen_y = screen_offset.y + 
+                                            (world->chunk_side_in_m * game_state->px_per_m) - 
+                                            (player_world_pos.chunk_rel.y * game_state->px_per_m);
+                draw_rect(bitmap, 
+                    player_base_on_screen_x, player_base_on_screen_y,
+                    player_base_on_screen_x + 3, player_base_on_screen_y + 3,
+                    255, 0, 0); 
+            } 
+        #endif
+                
+        }
     }
-    
+
 }
 
 

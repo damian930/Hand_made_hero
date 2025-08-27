@@ -1,8 +1,5 @@
-#pragma once
-
 // TODO: remove these 
 #include "stdio.h"
-#include "Assert.h"
 #include <fstream>
 #include <string>
 
@@ -10,8 +7,6 @@
 #include "base.h"
 #include "game_platform_comunication.h"
 #include "august.cpp"
-
-// TODO: deal with multiple header file includes
 
 // == File system, might get moved out at some point, here for now
 

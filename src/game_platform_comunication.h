@@ -1,4 +1,5 @@
-#pragma once
+#ifndef GAME_PLATFORM_COMUNICATION_H
+#define GAME_PLATFORM_COMUNICATION_H
 
 #include "base.h"
 
@@ -91,5 +92,4 @@ struct Some_more_platform_things_to_use {
 
 
 
-
-
+#endif 

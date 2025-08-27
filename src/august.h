@@ -1,4 +1,5 @@
-#pragma once
+#ifndef AUGUST_H
+#define AUGUST_H
 
 // TODO: remove these
 #include "base.h"
@@ -76,29 +77,4 @@ struct Game_state {
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+#endif 
