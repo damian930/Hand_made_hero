@@ -457,7 +457,7 @@ void game_update(Bitmap* bitmap,
     {
         
         // Some constant used for drawing
-        Vec2_F32 screen_offset = vec2_f32(200.0f, 150.0f);
+        Vec2_F32 screen_offset = vec2_f32(200.0f, 100.0f);
         World_pos player_world_pos = world_pos_from_camera_rel(world, camera, player->camera_rel);
         
         //draw_some_shit(game_state, bitmap);

@@ -277,6 +277,79 @@ void convert_low_entity_to_high(World* world, Camera* camera, U32 low_index)
     }
 }
 
+file_private
+void convert_high_entity_to_low(World* world, U32 low_index)
+{
+    Low_entity* low = get_low_entity(world, low_index);
+
+    // NOTE: Shoud be high, since was simulated before
+    Assert(low->is_also_high);
+
+    U32 last_high_index = world->high_entity_count - 1;
+    U32 high_index_to_delete = low->high_idx;
+    
+    if (high_index_to_delete != last_high_index)
+    {
+        High_entity* high_to_delete = &world->high_entities[low->high_idx]; 
+        High_entity* last_high = &world->high_entities[last_high_index];
+        *high_to_delete = *last_high;
+        world->low_entities[last_high->low_index].high_idx = high_index_to_delete;
+    }
+    world->high_entity_count -= 1;
+    low->is_also_high = false;
+}
+
+file_private
+void unload_chunk(World* world, Vec2_S32 chunk_pos)
+{
+    Chunk* chunk = get_chunk_in_world__opt(world, chunk_pos);
+
+    // NOTE: Since we are unloading the chunk, it should alredy be created
+    Assert(chunk);
+
+    for (Entity_block* block_it = &chunk->entity_block;
+            block_it != 0;
+            block_it = block_it->next_block     
+    ) {
+        for (U32 low_index_inside_block = 0;
+                low_index_inside_block < block_it->low_indexes_count;
+                low_index_inside_block += 1     
+        ) {
+            U32 low_index = block_it->low_indexes[low_index_inside_block];
+            Low_entity* low = get_low_entity(world, low_index);
+
+            // NOTE: Since we are unloading, entity inside this chunk, shoud be high
+            Assert(low->is_also_high);
+
+            convert_high_entity_to_low(world, low_index);
+        }
+    }
+}
+
+file_private
+void load_chunk(Arena* world_arena, World* world, Camera* camera, Vec2_S32 chunk_pos)
+{
+    Chunk* chunk = get_chunk_in_world__spawns(world_arena, world, chunk_pos);
+
+    for (Entity_block* block_it = &chunk->entity_block;
+            block_it != 0;
+            block_it = block_it->next_block     
+    ) {
+        for (U32 low_index_inside_block = 0;
+                low_index_inside_block < block_it->low_indexes_count;
+                low_index_inside_block += 1     
+        ) {
+            U32 low_index = block_it->low_indexes[low_index_inside_block];
+            Low_entity* low = get_low_entity(world, low_index);
+
+            // NOTE: Since we are loading, entity inside this chunk cant alredy be high
+            Assert(!low->is_also_high);
+
+            convert_low_entity_to_high(world, camera, low_index);
+        }
+    }
+}
+
 // TODO: think about a function like "spawn_tree_maybe" that only spawn if the chunk exists
 //       right now this creates a world chunk if it doesnt exist
 //       i am fine with it, just dont like that we might forget about it, 
@@ -370,42 +443,6 @@ B32 validate_low_high_entity_pairs(World* world)
     return is_valid;
 }
 
-#if 0
-file_private
-void convert_low_entities_inside_camera_region_into_high_if_needed(
-    World* world, Camera* camera
-) {
-    Vec2_S32 min_high_chunk = camera->world_pos.chunk - vec2_s32(camera->chunks_from_camera_chunk);
-    Vec2_S32 max_high_chunk = camera->world_pos.chunk + vec2_s32(camera->chunks_from_camera_chunk);
-
-    for (S32 high_chunk_y = min_high_chunk.y;
-         high_chunk_y <= max_high_chunk.y;
-         high_chunk_y += 1     
-    ) {
-        for (S32 high_chunk_x = min_high_chunk.x;
-             high_chunk_x <= max_high_chunk.x;
-             high_chunk_x += 1     
-        ) { 
-            Entity_block* test_first_block = get_entity_block__asserts(world, vec2_s32(high_chunk_x, high_chunk_y)); 
-                    
-            for (Entity_block* block_it = test_first_block;
-                 block_it != 0;
-                 block_it = block_it->next_block     
-            ) {
-                for (U32 low_idx = 0;
-                     low_idx < block_it->low_entity_count;
-                     low_idx += 1     
-                ) {
-                    Low_entity* low = &block_it->low_entities[low_idx];
-                    convert_low_entity_to_high_if_needed(world, camera, low);
-                }
-            }
-        }
-    }
-
-}
-#endif
-
 // NOTE: This is the main function that takes care of World simulation region
 //       and camera relative both for the player and the entities
 file_private
@@ -418,18 +455,11 @@ void fix_camera_world_invariant(Arena* world_arena,
 
     // 1. Move the camera
     World_pos player_world_pos = world_pos_from_camera_rel(world, camera, player->camera_rel);
+    World_pos old_camera_world_pos = camera->world_pos;
     camera->world_pos = player_world_pos;
     
     // 2. Change the player_rel 
-    // NOTE: this vec2_f32(0.0f) world if we set the camera to be the current players pos
-    //       otherwise we would need to adjust the player better, since just 0.0f would move the player
-    {
-        Assert(player_world_pos.chunk == camera->world_pos.chunk);
-        Assert(player_world_pos.chunk_rel == camera->world_pos.chunk_rel);
-        // NOTE: if this fails, then the camera is using a more sofisticated movemened, 
-        //       so change the player adjustment losic and remove these Asserts
-    }
-    Vec2_F32 new_player_camera_rel = vec2_f32(0.0f);
+    Vec2_F32 new_player_camera_rel = camera_rel_pos_from_world_pos(world, camera, player_world_pos);
     player->camera_rel = new_player_camera_rel;
     Assert(is_camera_rel_pos_withing_camera_bounds(world, camera, player->camera_rel));
 
@@ -599,7 +629,7 @@ void move_player(Arena* world_arena,
                             Assert(test_low->is_also_high);
                             High_entity* test_high = &world->high_entities[test_low->high_idx];
                             
-                            #if 1
+                            #if 0
                             {
                                 World_pos player_world_pos = world_pos_from_camera_rel(world, camera, player->camera_rel);
                                 if (test_low->world_pos.chunk == player_world_pos.chunk)

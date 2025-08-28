@@ -22,6 +22,7 @@
 -- High frequency region and low, some like that
 -- Position based storage of entites per chunk
 -- Start using entities insted of tiles
+-- Start drawing entities better (dont draw part of them if they are off the drawing region. Also do it the other way for entties that are a bit outside the drawing region but can be seen from inside the drawing region)
 
 === Ideas
 -- Have a sym_region be a region that gets simulated based on something, for example a player. 

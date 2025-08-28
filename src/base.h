@@ -30,6 +30,7 @@ typedef S32 B32;
 #define Terabytes_U32(value) ((U32)1024 * Gigabytes_U32(value))  
 
 #define Assert(expr) if (!(expr))  { *((U8*)0) = 69; }
+
 #define InvalidCodePath Assert(false);
 #define DebugStopHere int x = 69;
 
