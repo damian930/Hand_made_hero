@@ -23,11 +23,6 @@ namespaced_enum Entity_direction : U32 {
     Left,
 };
 
-namespaced_enum Entity_update_frequency : U32 {
-    Low,
-    Low_High,
-};
-
 namespaced_enum Entity_type : U32 {
     Tree,
 };
@@ -51,22 +46,15 @@ struct High_entity {
     Entity_direction direction;
 };
 
-#if 0
-struct Entity {
-    Low_entity* low;
-    High_entity* high;
-};
-#endif
-
 struct Entity_block {
-    Low_entity low_entities[4]; // TODO: make this value better (the size of the array)
-    U32 low_entity_count;
+    U32 low_indexes[4]; // TODO: make this value better (the size of the array)
+    U32 low_indexes_count;
     
     Entity_block* next_block;
 };
 
 struct Chunk {
-    Chunk* next_in_hash;
+    Chunk* next_in_chunk_list;
 
     Vec2_S32 chunk_pos;
     Entity_block entity_block;
@@ -79,9 +67,6 @@ struct Chunk_list {
     Chunk* chunk;
 };
 
-// THINGS_TO_IMPLEMENT: 
-// -- Some way to reference then from outer position isnide the world
-
 struct World {
     U32 chunk_side_in_tiles;
     F32 tile_side_in_m;
@@ -89,11 +74,14 @@ struct World {
     
     S32 chunk_safe_margin_from_middle_chunk;
     Vec2_S32 mid_chunk;
-
-    Chunk_list chunk_lists[1024];
     
+    Low_entity low_entities[1000];
+    U32 low_entity_count;
+
     High_entity high_entities[128]; 
     U32 high_entity_count;
+    
+    Chunk_list chunk_lists[1024];
 };
 
 

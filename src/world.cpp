@@ -30,7 +30,7 @@ Chunk* get_chunk_in_world__optional_spawning(World* world,
         Chunk* last_chunk = chunk_list->chunk;
         for (Chunk* it_chunk = chunk_list->chunk; 
             it_chunk != 0; 
-            it_chunk = it_chunk->next_in_hash
+            it_chunk = it_chunk->next_in_chunk_list
         ) {
             last_chunk = it_chunk;
             
@@ -48,10 +48,10 @@ Chunk* get_chunk_in_world__optional_spawning(World* world,
             {
                 // TODO: make this better
                 Chunk* new_chunk = ArenaPush(world_arena, Chunk);
-                new_chunk->next_in_hash = 0;
+                new_chunk->next_in_chunk_list = 0;
                 new_chunk->chunk_pos = chunk_pos;
     
-                last_chunk->next_in_hash = new_chunk;
+                last_chunk->next_in_chunk_list = new_chunk;
                 result = new_chunk;
             }
         }
@@ -62,7 +62,7 @@ Chunk* get_chunk_in_world__optional_spawning(World* world,
         {
             chunk_list->is_initialised = true;
             chunk_list->chunk = ArenaPush(world_arena, Chunk); 
-            chunk_list->chunk->next_in_hash = 0;
+            chunk_list->chunk->next_in_chunk_list = 0;
             chunk_list->chunk->chunk_pos = chunk_pos;
             chunk_list->chunk->entity_block = {};
             
@@ -73,6 +73,7 @@ Chunk* get_chunk_in_world__optional_spawning(World* world,
     return result;
 } 
 
+file_private 
 Chunk* get_chunk_in_world__spawns(Arena* world_arena, World* world, Vec2_S32 chunk_pos) 
 {   
     Chunk* result = get_chunk_in_world__optional_spawning(world, chunk_pos, world_arena);
@@ -80,6 +81,7 @@ Chunk* get_chunk_in_world__spawns(Arena* world_arena, World* world, Vec2_S32 chu
     return result;
 }
 
+file_private
 Chunk* get_chunk_in_world__opt(World* world, Vec2_S32 chunk_pos) 
 {   
     Chunk* result = get_chunk_in_world__optional_spawning(world, chunk_pos);
@@ -89,6 +91,7 @@ Chunk* get_chunk_in_world__opt(World* world, Vec2_S32 chunk_pos)
 // ====================================================================================
 
 // NOTE: this was not removed on 27th of August 2025, since move_player was using this for debug purposes
+file_private
 Vec2_S32 tile_pos_from_chunk_rel(World* world, Vec2_F32 chunk_rel) {
     Vec2_S32 result = {};
     result.x = floor_F32_to_S32(chunk_rel.x / world->tile_side_in_m);
@@ -96,6 +99,7 @@ Vec2_S32 tile_pos_from_chunk_rel(World* world, Vec2_F32 chunk_rel) {
     return result;
 }
 
+file_private
 B32 is_world_pos_canonical(World* world, World_pos test_pos) {
     B32 chunk_rel_valid = (   test_pos.chunk_rel.x >= 0
                            && test_pos.chunk_rel.y >= 0
@@ -112,11 +116,12 @@ B32 is_world_pos_canonical(World* world, World_pos test_pos) {
                     );
     
     if (!is_valid) {
-        int x = 0;
+        DebugStopHere;
     }
     return is_valid;
 }
 
+file_private
 void recanonicalize_world_pos(World* world, World_pos* invalid_pos) {
     S32 chunk_offset_x = floor_F32_to_S32(invalid_pos->chunk_rel.x / world->chunk_side_in_m);
     S32 chunk_offset_y = floor_F32_to_S32(invalid_pos->chunk_rel.y / world->chunk_side_in_m);
@@ -130,23 +135,27 @@ void recanonicalize_world_pos(World* world, World_pos* invalid_pos) {
     Assert(is_world_pos_canonical(world, *invalid_pos));
 };
 
+file_private
 World_pos recanonicalize_world_pos_copy(World* world, World_pos* invalid_pos) {
     World_pos result = *invalid_pos;
     recanonicalize_world_pos(world, &result);
     return result;
 };
 
+file_private
 void move_world_pos_by_n_meters(World* world, World_pos* pos, Vec2_F32 m) {
     pos->chunk_rel += m;
     recanonicalize_world_pos(world, pos);
 }
 
+file_private
 World_pos move_world_pos_by_n_meters_copy(World* world, World_pos* pos, Vec2_F32 m) {
     World_pos result = *pos;
     move_world_pos_by_n_meters(world, &result, m);
     return result;
 }
 
+file_private
 Vec2_F32 subtract_world_pos(World* world, World_pos* pos1, World_pos* pos2) {
     Vec2_F32 chunk_diff = vec2_f32_from_vec2_s32(pos1->chunk - pos2->chunk);
     Vec2_F32 chunk_rel_diff = pos1->chunk_rel - pos2->chunk_rel;
@@ -198,33 +207,74 @@ Vec2_F32 camera_rel_pos_from_world_pos(World* world, Camera* camera, World_pos w
 }
 
 // == Entity stuff here 
+
+file_private 
+Low_entity* get_low_entity(World* world, U32 low_index) 
+{
+    Assert(low_index < world->low_entity_count);
+
+    Low_entity* low = &world->low_entities[low_index];
+    return low;
+}
+
+// TODO: i dont like that this says asserts
+//       maybe just use the _opt version and then asserm manually, cause this assert is more for debug,
+//       so having it as a separate func is kinda dumb maybe
+file_private
 Entity_block* get_entity_block__asserts(World* world, Vec2_S32 chunk_pos) {
     Chunk* chunk = get_chunk_in_world__opt(world, chunk_pos);
     Assert(chunk);
     return &chunk->entity_block;
 }
 
-void convert_low_entity_to_high_if_needed(World* world, Camera* camera, Low_entity* low)
+// NOTE: this saves like 2 lines of code, but i spent 1.5 hours trying to fix a bug relate to this.
+//       i was using a local index to a global index to acces a global low_entity
+//       it would have been fine if this same error didnt happend the exact same way in 3 different places
+//       (28th of August 2025 12:44 (24 hour system))
+file_private
+Low_entity* get_low_entity_from_entity_block(World* world, Entity_block* block, U32 block_index)
 {
-    Assert(world->high_entity_count < ArrayCount(world->high_entities));
+    U32 low_entity_index = block->low_indexes[block_index];
+    Low_entity* low = get_low_entity(world, low_entity_index);
+    return low;
+}
 
+file_private
+B32 convert_low_entity_to_high_if_needed(World* world, Camera* camera, U32 low_index
+) {
+    Assert(world->high_entity_count < ArrayCount(world->high_entities));
+    Low_entity* low = get_low_entity(world, low_index);
+    B32 did_convert = false;
+    
     if (!low->is_also_high && 
         is_world_pos_within_camera_bounds(world, camera, low->world_pos)
     ) {
-        low->is_also_high = true;
-        low->high_idx = world->high_entity_count;
+        did_convert = true;
 
-        High_entity new_high = {};
-        new_high.camera_rel_pos = camera_rel_pos_from_world_pos(world, camera, low->world_pos);
-        new_high.direction      = Entity_direction::Back;
-        
-        world->high_entities[world->high_entity_count] = new_high;
-        world->high_entity_count += 1;
+        if (low->world_pos.chunk_rel.x != 0.0f && low->world_pos.chunk_rel.y != 0.0f) {
+            DebugStopHere;
+        }
+
+        U32 new_high_index = world->high_entity_count++; 
+        low->is_also_high = true;
+        low->high_idx = new_high_index;
+
+        High_entity* new_high = &world->high_entities[new_high_index];
+        new_high->camera_rel_pos = camera_rel_pos_from_world_pos(world, camera, low->world_pos);
+        new_high->direction      = Entity_direction::Back;
+        new_high->low_index      = low_index;
     }
-    else {
+
+    return did_convert;
+}
+
+file_private
+void convert_low_entity_to_high(World* world, Camera* camera, U32 low_index)
+{
+    B32 did_convert = convert_low_entity_to_high_if_needed(world, camera, low_index);
+    if (!did_convert) {
         InvalidCodePath;
     }
-
 }
 
 // TODO: think about a function like "spawn_tree_maybe" that only spawn if the chunk exists
@@ -242,6 +292,7 @@ void spawn_entity(Arena* world_arena, World* world, Camera* camera,
                   Entity_type entt_type,
                   Vec2_F32 entt_speed
 ) {
+    Assert(world->low_entity_count < ArrayCount(world->low_entities));
     Chunk* chunk = get_chunk_in_world__spawns(world_arena, world, entt_mid_pos.chunk);
     
     // Gettting a first usable block
@@ -253,7 +304,7 @@ void spawn_entity(Arena* world_arena, World* world, Camera* camera,
     ) {
         last_block = usable_block;
      
-        if (usable_block->low_entity_count < ArrayCount(usable_block->low_entities)) {
+        if (usable_block->low_indexes_count < ArrayCount(usable_block->low_indexes)) {
             break;
         }
 
@@ -269,23 +320,27 @@ void spawn_entity(Arena* world_arena, World* world, Camera* camera,
     }
 
     // Inserting the new entity 
-    Low_entity new_low = {};    
-    new_low.type         = entt_type;
-    new_low.world_pos    = entt_mid_pos; // NOTE: this is the pos of the middle of an entity
-    new_low.speed        = entt_speed;
-    new_low.width        = entt_width;
-    new_low.height       = entt_height;
+    U32 new_low_index = world->low_entity_count++; 
+    Low_entity* new_low = &world->low_entities[new_low_index];    
+    new_low->type         = entt_type;
+    new_low->world_pos    = entt_mid_pos; // NOTE: this is the pos of the middle of an entity
+    new_low->speed        = entt_speed;
+    new_low->width        = entt_width;
+    new_low->height       = entt_height;
+    new_low->is_also_high = false;
 
-    Low_entity* low = &usable_block->low_entities[usable_block->low_entity_count];
-    *low = new_low; 
-    usable_block->low_entity_count += 1;
-
-    convert_low_entity_to_high_if_needed(world, camera, low);
+    usable_block->low_indexes[usable_block->low_indexes_count++] = new_low_index;
+    convert_low_entity_to_high_if_needed(world, camera, new_low_index);
 }
 
+file_private
 void spawn_tree(Arena* world_arena, World* world, Camera* camera, 
-                World_pos tree_mid_pos
-) {
+                World_pos tree_mid_pos, F32 px_per_m
+) { 
+    // TODO: maybe this is not the way to do it
+    F32 tree_width_in_px  = 75.0f - 7.0f;
+    F32 tree_height_in_px = 105.0f;
+
     F32 width        = 1.0f;
     F32 height       = 1.0f;
     Vec2_F32 speed   = vec2_f32(0.0f, 0.0f);
@@ -297,6 +352,26 @@ void spawn_tree(Arena* world_arena, World* world, Camera* camera,
 
 }
 
+file_private
+B32 validate_low_high_entity_pairs(World* world)
+{
+    B32 is_valid = true;
+    for (U32 low_index = 0; low_index < world->low_entity_count; low_index += 1)
+    {
+        Low_entity* low = get_low_entity(world, low_index);
+        if (low->is_also_high)
+        {
+            is_valid = (world->high_entities[low->high_idx].low_index == low_index); 
+            if (!is_valid) {
+                break;
+            }
+        }
+    }
+    return is_valid;
+}
+
+#if 0
+file_private
 void convert_low_entities_inside_camera_region_into_high_if_needed(
     World* world, Camera* camera
 ) {
@@ -329,24 +404,31 @@ void convert_low_entities_inside_camera_region_into_high_if_needed(
     }
 
 }
+#endif
 
 // NOTE: This is the main function that takes care of World simulation region
 //       and camera relative both for the player and the entities
-
-
-
+file_private
 void fix_camera_world_invariant(Arena* world_arena,
                                 World* world, 
                                 Camera* camera, 
                                 Player* player
 ) {
+    Assert(validate_low_high_entity_pairs(world));
 
     // 1. Move the camera
-    World_pos new_camera_pos = world_pos_from_camera_rel(world, camera, player->camera_rel);
-    camera->world_pos = new_camera_pos;
-
+    World_pos player_world_pos = world_pos_from_camera_rel(world, camera, player->camera_rel);
+    camera->world_pos = player_world_pos;
+    
     // 2. Change the player_rel 
-    // TODO: make this better, since just 0.0f actually moves the player
+    // NOTE: this vec2_f32(0.0f) world if we set the camera to be the current players pos
+    //       otherwise we would need to adjust the player better, since just 0.0f would move the player
+    {
+        Assert(player_world_pos.chunk == camera->world_pos.chunk);
+        Assert(player_world_pos.chunk_rel == camera->world_pos.chunk_rel);
+        // NOTE: if this fails, then the camera is using a more sofisticated movemened, 
+        //       so change the player adjustment losic and remove these Asserts
+    }
     Vec2_F32 new_player_camera_rel = vec2_f32(0.0f);
     player->camera_rel = new_player_camera_rel;
     Assert(is_camera_rel_pos_withing_camera_bounds(world, camera, player->camera_rel));
@@ -377,28 +459,33 @@ void fix_camera_world_invariant(Arena* world_arena,
                  block_it != 0;
                  block_it = block_it->next_block     
             ) {
-                for (U32 low_idx = 0;
-                     low_idx < block_it->low_entity_count;
-                     low_idx += 1     
+                for (U32 low_index_inside_block = 0;
+                     low_index_inside_block < block_it->low_indexes_count;
+                     low_index_inside_block += 1     
                 ) {
-
                     // TODO: Need to get newly high into high
                     //       Need to get the newly low out of high
-                    Low_entity* low = &block_it->low_entities[low_idx];
+                    U32 low_index = block_it->low_indexes[low_index_inside_block];
+                    Low_entity* low = get_low_entity(world, low_index);
+
                     this_is_a_part_of_not_having_branes {
                         low->is_also_high = false;
                     }
-                    convert_low_entity_to_high_if_needed(world, camera, low);
+                    convert_low_entity_to_high_if_needed(world, camera, low_index);
                 }
             }
 
         }
     }
 
+    DebugStopHere;
+    Assert(validate_low_high_entity_pairs(world));
+
     #undef this_is_a_part_of_not_having_branes
 
 }
 
+file_private
 void fix_camera_world_invariant_if_needed(Arena* world_arena,
                                           World* world, 
                                           Camera* camera, 
@@ -417,7 +504,6 @@ void fix_camera_world_invariant_if_needed(Arena* world_arena,
 // =========================================
 // =========================================
 
-// file_private
 struct Ray_intersection_result {
     B32 alredy_colliding;
     B32 will_colide;
@@ -482,7 +568,6 @@ void move_player(Arena* world_arena,
 
     if (displacement != vec2_f32(0.0f, 0.0f))
     {
-
         // TODO: see if this type thing is used else wher, and make a func out of it called 
         //       "get camera rect bound in world chunks"
         Vec2_S32 min_high_chunk = camera->world_pos.chunk - vec2_s32(camera->chunks_from_camera_chunk);
@@ -497,20 +582,20 @@ void move_player(Arena* world_arena,
              high_chunk_y += 1     
             ) {
                 for (S32 high_chunk_x = min_high_chunk.x;
-                    high_chunk_x <= max_high_chunk.x;
-                    high_chunk_x += 1     
+                     high_chunk_x <= max_high_chunk.x;
+                     high_chunk_x += 1     
                 ) { 
                     Entity_block* test_first_block = get_entity_block__asserts(world, vec2_s32(high_chunk_x, high_chunk_y)); 
                     
                     for (Entity_block* block_it = test_first_block;
-                        block_it != 0;
-                        block_it = block_it->next_block     
+                         block_it != 0;
+                         block_it = block_it->next_block     
                     ) {
                         for (U32 low_idx = 0;
-                            low_idx < block_it->low_entity_count;
-                            low_idx += 1     
-                        ) {
-                            Low_entity* test_low = &block_it->low_entities[low_idx];
+                             low_idx < block_it->low_indexes_count;
+                             low_idx += 1     
+                        ) { 
+                            Low_entity* test_low = get_low_entity_from_entity_block(world, block_it, low_idx);
                             Assert(test_low->is_also_high);
                             High_entity* test_high = &world->high_entities[test_low->high_idx];
                             
@@ -522,7 +607,7 @@ void move_player(Arena* world_arena,
                                     Vec2_S32 test_entity_tile = tile_pos_from_chunk_rel(world, test_low->world_pos.chunk_rel);
                                     Vec2_S32 player_tile = tile_pos_from_chunk_rel(world, player_world_pos.chunk_rel);
                                     if (test_entity_tile == player_tile) {
-                                        int x = 0;
+                                        DebugStopHere;
                                     }
                                 }
                             }

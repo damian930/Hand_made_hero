@@ -16,7 +16,7 @@ typedef uint64_t U64;
 typedef float  F32;
 typedef double F64;
 
-typedef bool B32;
+typedef S32 B32;
 
 #define file_private static
 #define global static
@@ -30,7 +30,8 @@ typedef bool B32;
 #define Terabytes_U32(value) ((U32)1024 * Gigabytes_U32(value))  
 
 #define Assert(expr) if (!(expr))  { *((U8*)0) = 69; }
-#define InvalidCodePath Assert(false)
+#define InvalidCodePath Assert(false);
+#define DebugStopHere int x = 69;
 
 // TODO: move this out to its own arena file maybe 
 // == These are just some more things, but proably moving them out would make more sense

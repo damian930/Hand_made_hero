@@ -342,12 +342,12 @@ void game_update(Bitmap* bitmap,
                 (tile_y == 7) || (tile_y == 8) || (tile_y == 9));
                 
                 if (tile_x == 0 && tile_y == 5) {
-                    int x = 0;
+                    DebugStopHere;
                 }
 
                 if ((is_vert_wall || is_hor_wall) && (!is_door)) {
                     spawn_tree(&game_state->arena, world, camera, 
-                        wall_spawn_pos);
+                        wall_spawn_pos, game_state->px_per_m);
                 }
 
             }
@@ -476,11 +476,11 @@ void game_update(Bitmap* bitmap,
                  block_it != 0;
                  block_it = block_it->next_block
             ) {
-                for (U32 low_idx = 0;
-                     low_idx < block_it->low_entity_count;
-                     low_idx += 1
+                for (U32 low_index_inside_block = 0;
+                     low_index_inside_block < block_it->low_indexes_count;
+                     low_index_inside_block += 1
                 ) {
-                    Low_entity* low = &block_it->low_entities[low_idx];
+                    Low_entity* low = get_low_entity_from_entity_block(world, block_it, low_index_inside_block);
                     Assert(low->is_also_high);
 
                     // NOTE: this is here for assert, but not yet used, since drawing is dumb
@@ -503,10 +503,14 @@ void game_update(Bitmap* bitmap,
                     F32 entity_min_y = entity_max_y - 
                                        (entity_h * game_state->px_per_m);
 
+                    F32 entity_center_x = 0.5f * (entity_max_x + entity_min_x);
+                    F32 entity_center_y = 0.5f * (entity_max_y + entity_min_y);
+
+
                     switch (low->type) {
                         case Entity_type::Tree: {
                             draw_bitmap(game_state->tree_00, bitmap, 
-                                entity_min_x, entity_min_y,
+                                entity_center_x, entity_center_y,
                                 tree_00_offset.x, tree_00_offset.y
                             );
                         } break;
@@ -516,6 +520,12 @@ void game_update(Bitmap* bitmap,
                         } break;
 
                     }
+
+                    draw_rect(bitmap, 
+                        entity_min_x, entity_min_y,
+                        entity_max_x, entity_max_y,
+                        100, 0, 0 
+                    );
                 }
 
             }
