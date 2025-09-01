@@ -42,7 +42,7 @@ struct Low_entity {
 struct High_entity {
     U32 low_index;
 
-    Vec2_F32 camera_rel_pos; // NOTE: this is the position of the middle of an entity
+    Vec2_F32 sim_reg_rel;  // NOTE: this is the position of the middle of an entity
     Entity_direction direction;
 };
 
@@ -83,12 +83,6 @@ struct World {
     
     Chunk_list chunk_lists[1024];
 };
-
-
-
-
-
-
 
 
 #endif 

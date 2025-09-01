@@ -1,28 +1,16 @@
-=== Some code stuff
--- Remove "pragma once" and use some ifdefs for header includes
-
 === Platform
--- Compile the game code into a dll and reload when compiled for eaiser usage
 
 === Game
--- Start having the map be generated using a hash map or something
--- Start basing stuf from the miffle like minecraft insted of the left lower corner
--- Add couple of hard coded entities
-
--- KINDA (it doesnt stick no more, but it doesnt slide for some reason) | Change the direction of vectors when colliding with tiles to remove the sticking problem
--- Start having entities (walls for example)
--- Introduce gravity, need a player to fall
 
 ===
--- Need a better way to store coordinate on the map
--- Colision is bad sometimes now, GJK sometimes fucks up
-
 === Current Goal
 
--- High frequency region and low, some like that
--- Position based storage of entites per chunk
--- Start using entities insted of tiles
--- Start drawing entities better (dont draw part of them if they are off the drawing region. Also do it the other way for entties that are a bit outside the drawing region but can be seen from inside the drawing region)
+
+=== Stuff that workd but i need to fix it 
+-- Collission is sometimes buggy
+-- Draw entities better (Partial drawing)
+-- Remove "this_is_a_part_of_not_having_branes" inside fix_camera_world_invariant and update it better
+-- Compile into a dll for more convinient reload
 
 === Ideas
 -- Have a sym_region be a region that gets simulated based on something, for example a player. 

@@ -1,5 +1,6 @@
-// TODO: remove this
-#pragma once 
+#ifndef MATH_H
+#define MATH_H
+
 #include <math.h>
 
 #include "base.h"
@@ -80,7 +81,16 @@ Vec3_U32 vec3_u32(U32 x, U32 y, U32 z) {
 
 // ============
 
+F32 vec2_f32_len_squared(Vec2_F32 vec) {
+    F32 result = Square(vec.x) + Square(vec.y);
+    return result;
+}
 
+// F32 vec2_f32_len(Vec2_F32 vec) {
+//     F32 result = vec2_f32_len_sqrd(vec);
+//     result = sqrtf(result);
+//     return result;
+// }   
 
 Vec2_F32 operator+(Vec2_F32 v1, Vec2_F32 v2) {
     Vec2_F32 result = {};
@@ -279,6 +289,4 @@ B32 find_idx_of_first_least_significant_set_bit(U32 value, U32* idx) {
 
 
 
-
-
-
+#endif

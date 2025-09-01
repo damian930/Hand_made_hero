@@ -22,7 +22,7 @@ struct Loaded_bitmap {
 
 struct Player {
     // NOTE: this represents the mid point of the player 
-    Vec2_F32 camera_rel;
+    Vec2_F32 sim_reg_rel;
 
     Vec2_F32 speed;
     F32 width;
@@ -36,11 +36,18 @@ struct Player_skin {
     Loaded_bitmap torso;
 };
 
-// NOTE: this is more like a Simulation_region
-struct Camera {
-    World_pos world_pos;           // NOTE: this is the middle of the camera
-    S32 chunks_from_camera_chunk;   
+struct Sim_reg {
+    World_pos world_pos;     // NOTE: this is the mid chunk of the sim region
+    S32 chunks_from_mid_chunk;   
 };
+
+# if 0
+struct Camera_region {
+    World_pos world_pos;   // NOTE: this is the middle of the camera region
+    F32 width;
+    F32 height;
+};
+#endif
 
 struct Game_state {
     B32 is_initialised;
@@ -52,7 +59,7 @@ struct Game_state {
     
     World world;
 
-    Camera camera;
+    Sim_reg sim_reg;
     Player player;
     
     Player_skin player_skin_front;
