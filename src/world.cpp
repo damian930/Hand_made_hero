@@ -238,12 +238,17 @@ B32 convert_low_entity_to_high(World* world, Sim_reg* sim_reg, U32 low_index)
     return did_convert;
 }
 
-void convert_high_entity_to_low(World* world, U32 low_index)
+B32 convert_high_entity_to_low(World* world, Sim_reg* sim_reg, U32 low_index)
 {
     Low_entity* low = get_low_entity(world, low_index);
+    
+    if (!low->is_also_high) {
+        return false;
+    }
 
-    // NOTE: Shoud be high, since was simulated before
-    Assert(low->is_also_high);
+    High_entity* high = &world->high_entities[low->high_idx];
+
+    low->world_pos = world_pos_from_rel_pos(world, &sim_reg->world_pos, high->sim_reg_rel);
 
     U32 last_high_index = world->high_entity_count - 1;
     U32 high_index_to_delete = low->high_idx;
@@ -257,6 +262,8 @@ void convert_high_entity_to_low(World* world, U32 low_index)
     }
     world->high_entity_count -= 1;
     low->is_also_high = false;
+
+    return true;
 }
 
 #if 0
@@ -312,14 +319,19 @@ void load_chunk(Arena* world_arena, World* world, Camera_* camera, Vec2_S32 chun
 }
 #endif
 
-void spawn_entity(Arena* world_arena, World* world, Sim_reg* sim_reg,
-                  World_pos entt_mid_pos, 
-                  F32 entt_width, F32 entt_height, 
-                  Entity_type entt_type,
-                  Vec2_F32 entt_speed
+void spawn_entity(Game_state* game_state, Low_entity new_low_entity
+                //   World_pos entt_mid_pos, 
+                //   F32 entt_width, F32 entt_height, 
+                //   Entity_type entt_type,
+                //   Vec2_F32 entt_speed,
+                //   U32 high_entity_to_track_index
 ) {
+    Arena* world_arena = &game_state->arena;
+    World* world = &game_state->world;
+    Sim_reg* sim_reg = &game_state->sim_reg;
+
     Assert(world->low_entity_count < ArrayCount(world->low_entities));
-    Chunk* chunk = get_chunk_in_world__spawns(world_arena, world, entt_mid_pos.chunk);
+    Chunk* chunk = get_chunk_in_world__spawns(world_arena, world, new_low_entity.world_pos.chunk);
     
     // Gettting a first usable block
     Entity_block* last_block;
@@ -348,11 +360,9 @@ void spawn_entity(Arena* world_arena, World* world, Sim_reg* sim_reg,
     // Inserting the new entity 
     U32 new_low_index = world->low_entity_count++; 
     Low_entity* new_low = &world->low_entities[new_low_index];    
-    new_low->type         = entt_type;
-    new_low->world_pos    = entt_mid_pos; // NOTE: this is the pos of the middle of an entity
-    new_low->speed        = entt_speed;
-    new_low->width        = entt_width;
-    new_low->height       = entt_height;
+    
+    *new_low = new_low_entity;
+    Assert(!new_low_entity.is_also_high);
     new_low->is_also_high = false;
 
     usable_block->low_indexes[usable_block->low_indexes_count++] = new_low_index;
@@ -360,17 +370,46 @@ void spawn_entity(Arena* world_arena, World* world, Sim_reg* sim_reg,
     Assert(converted);
 }
 
-void spawn_tree(Arena* world_arena, World* world, Sim_reg* sim_reg,  
-                World_pos tree_mid_pos, F32 px_per_m
-) { 
-    F32 width        = 1.0f;
-    F32 height       = 1.0f;
-    Vec2_F32 speed   = vec2_f32(0.0f, 0.0f);
-    Entity_type type = Entity_type::Tree;
+// TODO: maybe just pass in game state, since it takes all the parts of it in
+void spawn_player(Game_state* game_state, World_pos player_mid_pos)
+{ 
+    Low_entity new_entity = {};
+    new_entity.width     = 1.95f;
+    new_entity.height    = 0.55f;
+    new_entity.speed     = vec2_f32(0.0f, 0.0f);
+    new_entity.world_pos = player_mid_pos;
+    new_entity.type      = Entity_type::Player;
 
-    spawn_entity(world_arena, world, sim_reg, 
-                 tree_mid_pos, width, height, 
-                 type, speed);
+    spawn_entity(game_state, new_entity);
+}
+
+
+void spawn_tree(Game_state* game_state, World_pos tree_mid_pos) 
+{ 
+    Low_entity new_entity = {};
+    new_entity.width     = 1.0f;
+    new_entity.height    = 1.0f;
+    new_entity.speed     = vec2_f32(0.0f, 0.0f);
+    new_entity.world_pos = tree_mid_pos;
+    new_entity.type      = Entity_type::Tree;
+
+    spawn_entity(game_state, new_entity);
+}
+
+void spawn_familiar(Game_state* game_state,  
+                    World_pos familiar_world_pos, U32 high_entity_to_track_index 
+) { 
+    Low_entity new_entity = {};
+    new_entity.width  = 1.0f;
+    new_entity.height = 1.0f;
+    new_entity.speed  = vec2_f32(0.0f, 0.0f);
+    new_entity.world_pos = familiar_world_pos;
+    new_entity.type   = Entity_type::Familiar;
+    
+    new_entity.has_entity_to_track = true;
+    new_entity.high_entity_to_track_index = high_entity_to_track_index;
+
+    spawn_entity(game_state, new_entity);
 }
 
 B32 validate_low_high_entity_pairs(World* world)
@@ -392,17 +431,60 @@ B32 validate_low_high_entity_pairs(World* world)
 
 // NOTE: This is the main function that takes care of World simulation region
 //       and camera relative both for the player and the entities
-B32 fix_camera_world_invariant(Arena* world_arena,
-                                World* world, 
-                                Sim_reg* sim_reg, 
-                                Player* player
+B32 fix_sim_reg_world_invariant(Arena* world_arena,
+                               World* world, 
+                               Sim_reg* sim_reg 
 ) {
     Assert(validate_low_high_entity_pairs(world));
     
-    World_pos player_world_pos = world_pos_from_rel_pos(world, &sim_reg->world_pos, player->sim_reg_rel);
+    Low_entity* player_low = get_low_entity(world, world->player_low_index);
+    Assert(player_low->is_also_high);
+    High_entity* player_high = &world->high_entities[player_low->high_idx];
+
+    World_pos player_world_pos = world_pos_from_rel_pos(world, &sim_reg->world_pos, player_high->sim_reg_rel);
     if (player_world_pos.chunk == sim_reg->world_pos.chunk) {
         return false;
     }
+
+    ///////////////////////////////////////////////////////////
+    // Damian: have to move entites from high to low
+    //
+    // NOTE: since we are about to move the sim region placement,
+    //       we have to convert current high into low, under the current sim_reg regime 
+    #define this_is_a_part_of_not_having_branes
+    this_is_a_part_of_not_having_branes {
+        Assert(world->low_entities[world->high_entities[0].low_index].type == Entity_type::Player);
+    
+        for (U32 high_entity_index = 0;
+             high_entity_index < world->high_entity_count;
+             high_entity_index += 0
+        ) {
+            High_entity* high = &world->high_entities[high_entity_index];
+
+            if (high->low_index != world->player_low_index)
+            {
+                Low_entity* low = &world->low_entities[high->low_index];
+
+                if (low->type == Entity_type::Familiar) {
+                    DebugStopHere;
+                }
+
+                B32 converted = convert_high_entity_to_low(world, sim_reg, high->low_index);
+                if (converted) {
+                    // NOTE: convert_high_entity_to_low will do the += 1 for the iteration,
+                    //       its kinda not great this way
+                } 
+                else {
+                    InvalidCodePath;
+                }
+            }
+            else {
+                high_entity_index += 1;
+            }
+
+        }
+    }
+    // =========================================
 
     ///////////////////////////////////////////////////////////
     // Damian: move the camera
@@ -414,8 +496,10 @@ B32 fix_camera_world_invariant(Arena* world_arena,
     // Damian: change the player rel
     // 
     Vec2_F32 new_player_rel = sim_reg_rel_from_world_pos(world, sim_reg, &player_world_pos);
-    player->sim_reg_rel = new_player_rel;
-    Assert(is_sim_reg_rel_pos_within_sim_reg_bounds(world, sim_reg, player->sim_reg_rel));
+    player_high->sim_reg_rel = new_player_rel;
+    Assert(is_sim_reg_rel_pos_within_sim_reg_bounds(world, sim_reg, player_high->sim_reg_rel));
+
+    Vec2_F32 correct_player_rel = player_high->sim_reg_rel;
 
     ///////////////////////////////////////////////////////////
     // Damian: spawn chunks that are to be simualated, 
@@ -426,9 +510,6 @@ B32 fix_camera_world_invariant(Arena* world_arena,
 
     // NOTE: This is the current version of moving low to high and high into low when camera moved
     // TODO: Do it like you have funcking brains
-    #define this_is_a_part_of_not_having_branes
-    this_is_a_part_of_not_having_branes world->high_entity_count = 0;
-    // =========================================
 
     for (S32 high_chunk_y = min_high_chunk.y;
          high_chunk_y <= max_high_chunk.y;
@@ -454,10 +535,21 @@ B32 fix_camera_world_invariant(Arena* world_arena,
                     Low_entity* low = get_low_entity(world, low_index);
 
                     this_is_a_part_of_not_having_branes {
-                        low->is_also_high = false;
+                        if (low->type != Entity_type::Player) {
+                            low->is_also_high = false;
+                            
+                            B32 converted = convert_low_entity_to_high(world, sim_reg, low_index);
+                            Assert(converted);
+                        }
+                        else {
+                            DebugStopHere;
+                        }
                     }
-                    B32 converted = convert_low_entity_to_high(world, sim_reg, low_index);
-                    Assert(converted);
+
+                    if (correct_player_rel != player_high->sim_reg_rel) {
+                        DebugStopHere;
+                    }
+
                 }
             }
 
@@ -480,7 +572,6 @@ struct Ray_intersection_result {
     F32 travel_time_normalized;
 };
 
-file_private
 Ray_intersection_result get_ray_intersection_result(
     F32 start_main_coord, F32 start_other_coord,
     F32 displacement_main_coord, F32 displacement_other_coord, 
@@ -521,19 +612,23 @@ Ray_intersection_result get_ray_intersection_result(
     return result;
 }
 
-void move_player(Arena* world_arena,
-                 World* world, 
-                 Player* player, 
-                 Sim_reg* sim_reg,
-                 F32 time_elapsed,
-                 Vec2_F32 acceleration_unit_vec
+void move_entity(Game_state* game_state,
+                 U32 low_entity_index, 
+                 F32 time_elapsed, Vec2_F32 acceleration_unit_vec, F32 acceleration_mult
 ) {
-    F32 t = time_elapsed;
-    F32 acceleration_multiplier = 150;
+    Arena* world_arena = &game_state->arena;
+    World* world = &game_state->world;
+    Sim_reg* sim_reg = &game_state->sim_reg;
 
-    Vec2_F32 a = acceleration_unit_vec * acceleration_multiplier;
-    Vec2_F32 new_speed = player->speed + (a * t);
-    Vec2_F32 displacement = (a/2 * t*t) + (player->speed * t);
+    Low_entity* low = get_low_entity(world, low_entity_index);
+    Assert(low->is_also_high);
+    High_entity* high = &world->high_entities[low->high_idx];
+
+    F32 t = time_elapsed;
+
+    Vec2_F32 a = acceleration_unit_vec * acceleration_mult;
+    Vec2_F32 new_speed = low->speed + (a * t);
+    Vec2_F32 displacement = (a/2 * t*t) + (low->speed * t);
     new_speed /= 1.5f; // NOTE: this is something like friction but a very vanila hardcoded version
 
     if (displacement != vec2_f32(0.0f, 0.0f))
@@ -570,7 +665,7 @@ void move_player(Arena* world_arena,
                             High_entity* test_high = &world->high_entities[test_low->high_idx];
                             
                             Vec2_F32 test_entity_half_dim = 0.5f * vec2_f32(test_low->width, test_low->height);
-                            Vec2_F32 player_half_dim = 0.5f * vec2_f32(player->width, player->height);
+                            Vec2_F32 player_half_dim = 0.5f * vec2_f32(low->width, low->height);
                             Vec2_F32 gjk_radius_dims = test_entity_half_dim + player_half_dim; 
                     
                             Vec2_F32 enitity_min = test_high->sim_reg_rel - gjk_radius_dims;
@@ -581,7 +676,7 @@ void move_player(Arena* world_arena,
                             {
                                 F32 right_wall_main_coord = enitity_max.x + eps;
                                 right_wall_coll = get_ray_intersection_result(
-                                    player->sim_reg_rel.x, player->sim_reg_rel.y,
+                                    high->sim_reg_rel.x, high->sim_reg_rel.y,
                                     displacement.x, displacement.y, 
                                     right_wall_main_coord,
                                     enitity_min.y, enitity_max.y
@@ -592,7 +687,7 @@ void move_player(Arena* world_arena,
                             {
                                 F32 left_wall_main_coord = enitity_min.x - eps;
                                 left_wall_coll = get_ray_intersection_result(
-                                    player->sim_reg_rel.x, player->sim_reg_rel.y,
+                                    high->sim_reg_rel.x, high->sim_reg_rel.y,
                                     displacement.x, displacement.y, 
                                     left_wall_main_coord,
                                     enitity_min.y, enitity_max.y
@@ -603,7 +698,7 @@ void move_player(Arena* world_arena,
                             {
                                 F32 top_wall_main_coord = enitity_max.y + eps;
                                 top_wall_coll = get_ray_intersection_result(
-                                    player->sim_reg_rel.y, player->sim_reg_rel.x,
+                                    high->sim_reg_rel.y, high->sim_reg_rel.x,
                                     displacement.y, displacement.x, 
                                     top_wall_main_coord,
                                     enitity_min.x, enitity_max.x
@@ -614,7 +709,7 @@ void move_player(Arena* world_arena,
                             {
                                 F32 bottom_wall_main_coord = enitity_min.y - eps;
                                 bottom_wall_coll = get_ray_intersection_result(
-                                    player->sim_reg_rel.y, player->sim_reg_rel.x,
+                                    high->sim_reg_rel.y, high->sim_reg_rel.x,
                                     displacement.y, displacement.x, 
                                     bottom_wall_main_coord,
                                     enitity_min.x, enitity_max.x
@@ -656,29 +751,51 @@ void move_player(Arena* world_arena,
             }
         
         Vec2_F32 corrected_displacement = displacement * min_time;
-        player->sim_reg_rel += corrected_displacement;
+        high->sim_reg_rel += corrected_displacement;
         if (min_time != 1.0f) {
-            player->speed = vec2_f32(0.0f, 0.0f);
+            low->speed = vec2_f32(0.0f, 0.0f);
         }
         
         else {
-            player->speed = new_speed;    
+            low->speed = new_speed;    
         }
         
-        fix_camera_world_invariant(world_arena, world, sim_reg, player);
-        
+        fix_sim_reg_world_invariant(world_arena, world, sim_reg);
     }
 
 }
 
-// =========================================
-// =========================================
-// =========================================
+///////////////////////////////////////////////////////////
+// Damian: more entity stuff, particularly update functions
+//
+// TODO: see if i would make more sence to store low and high and indexes togethew, 
+//       so less accessing is then required
+void update_familiar(Game_state* game_state, 
+                     U32 familiar_low_index, F32 time_elapsed
+) {
+    World* world = &game_state->world;
 
+    Low_entity* familiar_low   = &world->low_entities[familiar_low_index];
+    Assert(familiar_low->type == Entity_type::Familiar);
+    Assert(familiar_low->is_also_high);
+    High_entity* familiar_high = &world->high_entities[familiar_low->high_idx];
 
-// ====================================================================================
+    F32 max_distance = 10.0f;
+    F32 min_distance = 3.0f;
+    F32 acceleration_mult = 75;
 
+    High_entity* followed_high = &world->high_entities[familiar_low->high_entity_to_track_index];
+    Vec2_F32 diff = followed_high->sim_reg_rel - familiar_high->sim_reg_rel;
+    
+    if (vec2_f32_len_squared(diff) >= Square(min_distance) &&
+        vec2_f32_len_squared(diff) <= Square(max_distance)
+    ) {
+        Vec2_F32 acc_unit_vec = diff / vec2_f32_len(diff);
+        move_entity(game_state, familiar_low_index, time_elapsed, acc_unit_vec, acceleration_mult);
+    }
+    DebugStopHere;
 
+}
 
 
 

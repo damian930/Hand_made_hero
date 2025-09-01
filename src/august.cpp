@@ -318,8 +318,6 @@ void game_update(Bitmap* bitmap,
             
             world->chunk_safe_margin_from_middle_chunk = WORLD_SAFE_MARGIN_IN_CHUNKS;
             world->mid_chunk = vec2_s32(WORLD_START_CHUNK_POS, WORLD_START_CHUNK_POS);
-            
-            world->high_entity_count = 0;
         }
         
         ///////////////////////////////////////////////////////////
@@ -332,6 +330,21 @@ void game_update(Bitmap* bitmap,
     
             sim_reg->world_pos = sim_reg_world_pos;
             sim_reg->chunks_from_mid_chunk = 1;
+
+            ///////////////////////////////////////////////////////////
+            // Damian: creating a player
+            spawn_player(game_state, sim_reg->world_pos);
+            world->player_low_index = 0;
+            B32 is_actually_a_player = world->low_entities[world->high_entities[world->player_low_index].low_index].type == Entity_type::Player; 
+            Assert(is_actually_a_player);
+
+            ///////////////////////////////////////////////////////////
+            // Damian: creating a familiar to track the player
+            
+            World_pos familiar_world_pos = {};
+            familiar_world_pos.chunk = vec2_s32(0, 0);
+            familiar_world_pos.chunk_rel = 0.25f * vec2_f32(world->chunk_side_in_m);
+            spawn_familiar(game_state, familiar_world_pos, 0);
 
             // TODO: dont like having this be hardcoded here, make a func that then can be used to do it in other places. 
             Vec2_S32 sim_reg_min_chunk = sim_reg->world_pos.chunk - vec2_s32(sim_reg->chunks_from_mid_chunk);
@@ -346,38 +359,9 @@ void game_update(Bitmap* bitmap,
                     chunk_x += 1     
                 ) { 
                     Chunk* chunk = get_chunk_in_world__spawns(world_arena, world, vec2_s32(chunk_x, chunk_y));
-
-                    for (Entity_block* block_it = &chunk->entity_block;
-                        block_it != 0;
-                        block_it = block_it->next_block     
-                    ) {
-                        for (U32 low_index_inside_block = 0;
-                            low_index_inside_block < block_it->low_indexes_count;
-                            low_index_inside_block += 1     
-                        ) {
-                            // NOTE: at this point, we dont have any highs until this point, so asserting for now
-                            // DATE: 1st September 2025
-                            U32 low_index = block_it->low_indexes[low_index_inside_block];
-                            B32 converted = convert_low_entity_to_high(world, sim_reg, low_index);
-                            Assert(converted);
-                            
-                        }
-                    }
-
                 }
             }
 
-        }
-
-        ///////////////////////////////////////////////////////////
-        // Damian: creating a player
-        Player* player = &game_state->player;
-        {
-            player->sim_reg_rel = vec2_f32(0.0f, 0.0f);
-            player->speed       = vec2_f32(0.0f, 0.0f);
-            player->width       = 1.95f;
-            player->height      = 0.55f;
-            player->direction   = Entity_direction::Back;
         }
 
         ///////////////////////////////////////////////////////////
@@ -400,8 +384,7 @@ void game_update(Bitmap* bitmap,
                 }
 
                 if ((is_vert_wall || is_hor_wall) && (!is_door)) {
-                    spawn_tree(&game_state->arena, world, sim_reg, 
-                        wall_spawn_pos, game_state->px_per_m);
+                    spawn_tree(game_state, wall_spawn_pos);
                 }
 
             }
@@ -430,14 +413,19 @@ void game_update(Bitmap* bitmap,
         game_state->backdrop = load_bmp_file(&game_state->arena, platform_things->read_file_fp, "..\\art\\hand_made_01\\test_background.bmp");
     }
 
-    // Some game_state unwrapped structs for easier referencing
-    World* world = &game_state->world;
-    Player* player = &game_state->player;
-    Sim_reg* sim_reg = &game_state->sim_reg;
+    ///////////////////////////////////////////////////////////
+    // Damian: some game_state unwrapped struxt for easier referencing
+    //
+    World* world             = &game_state->world;
+    Sim_reg* sim_reg         = &game_state->sim_reg;
+    Low_entity* player_low   = get_low_entity(world, world->player_low_index);
+    Assert(player_low->is_also_high);
+    High_entity* player_high = &world->high_entities[player_low->high_idx];
 
-    // Moving stuff
+    ///////////////////////////////////////////////////////////
+    // Damian: getting data to then move the player
+    //
     {
-        // Getting a new direction based on the users input
         Vec2_F32 acceleration_unit_vec = {};
         if (keyboard->is_used) 
         {   
@@ -446,7 +434,7 @@ void game_update(Bitmap* bitmap,
             if (keyboard->s_pressed) { acceleration_unit_vec.y = -1.0f; } 
             if (keyboard->d_pressed) { acceleration_unit_vec.x = 1.0f; }
             if (keyboard->q_pressed) {
-                player->speed = vec2_f32(0.0f, 0.0f);
+                player_low->speed = vec2_f32(0.0f, 0.0f);
             }
 
             if (acceleration_unit_vec.x != 0.0f && acceleration_unit_vec.y != 0.0f) {
@@ -459,58 +447,97 @@ void game_update(Bitmap* bitmap,
                 keyboard->s_pressed && 
                 keyboard->d_pressed
             ) {
-                player->direction = Entity_direction::Front;
+                player_high->direction = Entity_direction::Front;
             }
             else if (keyboard->w_pressed && keyboard->a_pressed) {
-                player->direction = Entity_direction::Back;
+                player_high->direction = Entity_direction::Back;
             }
             else if (keyboard->w_pressed && keyboard->d_pressed) {
-                player->direction = Entity_direction::Back;
+                player_high->direction = Entity_direction::Back;
             }
             else if (keyboard->s_pressed && keyboard->a_pressed) {
-                player->direction = Entity_direction::Front;
+                player_high->direction = Entity_direction::Front;
             }            
             else if (keyboard->s_pressed && keyboard->d_pressed) {
-                player->direction = Entity_direction::Front;
+                player_high->direction = Entity_direction::Front;
             }
             else if (keyboard->w_pressed) {
-                player->direction = Entity_direction::Back;
+                player_high->direction = Entity_direction::Back;
             }
             else if (keyboard->a_pressed) {
-                player->direction = Entity_direction::Left;
+                player_high->direction = Entity_direction::Left;
             } 
             else if (keyboard->s_pressed) {
-                player->direction = Entity_direction::Front;
+                player_high->direction = Entity_direction::Front;
             } 
             else if (keyboard->d_pressed) {
-                player->direction = Entity_direction::Right;
+                player_high->direction = Entity_direction::Right;
             }
             else {
-                player->direction = Entity_direction::Front;
+                player_high->direction = Entity_direction::Front;
             }
 
         #if 1
             if (keyboard->r_pressed) {
-                player->sim_reg_rel = vec2_f32(0.0f, 0.0f);
+                player_high->sim_reg_rel = vec2_f32(0.0f, 0.0f);
             }
         #endif
         
         }        
 
-        // Getting phisics done on the player
-        move_player(
-            &game_state->arena, world, player, sim_reg, 
-            time_elapsed,
-            acceleration_unit_vec);
-            // game_state->background_offset += 0.1f;
+        F32 player_acceleration_mult = 225;
+        move_entity(game_state,
+            world->player_low_index, 
+            time_elapsed, acceleration_unit_vec, player_acceleration_mult);
     }
 
-    // Drawing the bitmap 
+    ///////////////////////////////////////////////////////////
+    // Damian: Updating high entities
+    //         With the current mamory layot, we get a lot of cashe misses,
+    //         but for now splitting this into its own loop is fine
+    //
+     for (U32 high_entity_index = 0;
+          high_entity_index < world->high_entity_count;
+          high_entity_index += 1
+    ) {
+        High_entity* high = &world->high_entities[high_entity_index];
+        Low_entity* low = &world->low_entities[high->low_index];
+
+        switch (low->type)
+        {
+            case Entity_type::Player: 
+            {
+
+            } break;
+
+            case Entity_type::Tree:
+            {
+
+            } break;
+
+            case Entity_type::Familiar: 
+            {
+                update_familiar(game_state, high->low_index, time_elapsed);
+            } break;
+
+            default:
+            {
+                InvalidCodePath;
+            } break;
+        }
+    }        
+
+    ///////////////////////////////////////////////////////////
+    // Damian: drawing the world
+    //
     {
         // Some constant used for drawing
+        
         Vec2_F32 screen_offset     = vec2_f32(200.0f, 100.0f);
-        World_pos player_world_pos = world_pos_from_rel_pos(world, &sim_reg->world_pos, player->sim_reg_rel);
+        World_pos player_world_pos = world_pos_from_rel_pos(world, &sim_reg->world_pos, player_high->sim_reg_rel);
+        Assert(player_world_pos.chunk == sim_reg->world_pos.chunk);
         Vec2_F32 tree_00_offset    = vec2_f32(40.0f, 83.0f);
+        Vec2_F32 hero_sprite_offset = vec2_f32(72.0f, 182.0f);
         
         draw_black_screen(game_state, bitmap);
 
@@ -519,84 +546,134 @@ void game_update(Bitmap* bitmap,
         {   
             // TODO: draw entities better. If an entity is only partly inside a chunk, then draw the part
             //       also check neighboring chunks to see if there are entites that have parts of them on the current chunk
-
             World_pos chunk_to_draw_mid_pos = {};  
             chunk_to_draw_mid_pos.chunk     = player_world_pos.chunk;
             chunk_to_draw_mid_pos.chunk_rel = 0.5f * vec2_f32(world->chunk_side_in_m);
-            
-            // TODO: need a better name
-            F32 max_distance_on_x = 0.5f * world->chunk_side_in_m + world->chunk_side_in_m;
-            F32 max_distance_on_y = 0.5f * world->chunk_side_in_m + world->chunk_side_in_m;
 
             // NOTE: for now we expext it to alredy exist
             Chunk* chunk = get_chunk_in_world__opt(world, chunk_to_draw_mid_pos.chunk);
             Assert(chunk);
 
-            for (Entity_block* block = &chunk->entity_block;
-                    block != 0;
-                    block = block->next_block
+            for (U32 high_entity_index = 0;
+                 high_entity_index < world->high_entity_count;
+                 high_entity_index += 1
             ) {
-                for (U32 block_idx = 0;
-                        block_idx < block->low_indexes_count;
-                        block_idx += 1 
-                ) {
-                    // NOTE: we expect it to be simulate when drawn for now
-                    Low_entity* low = get_low_entity_from_entity_block(world, block, block_idx);
-                    Assert(low->is_also_high);
+                // NOTE: this is here for assert, but not yet used, since drawing is dumb
+                High_entity* high = &world->high_entities[high_entity_index];
+                Low_entity* low = &world->low_entities[high->low_index];
 
-                    Vec2_F32 rel_pos = sim_reg_rel_from_world_pos(world, sim_reg, &low->world_pos);
-                    if (rel_pos.x < max_distance_on_x && rel_pos.y < max_distance_on_y)
-                    {
-                        // NOTE: this is here for assert, but not yet used, since drawing is dumb
-                        High_entity* high = &world->high_entities[low->high_idx];
+                World_pos entity_world_pos = world_pos_from_rel_pos(world, &sim_reg->world_pos, high->sim_reg_rel);
+
+                if (entity_world_pos.chunk == sim_reg->world_pos.chunk)
+                {
+                    Vec2_F32 entity_chunk_pos = entity_world_pos.chunk_rel;
                     
-                        Vec2_F32 entity_chunk_pos = low->world_pos.chunk_rel;
-                        F32 entity_w = low->width;
-                        F32 entity_h = low->height;
+                    F32 entity_w = low->width;
+                    F32 entity_h = low->height;
 
-                        F32 entity_min_x = screen_offset.x + 
-                                        (entity_chunk_pos.x * game_state->px_per_m) -
-                                        (low->width / 2 * game_state->px_per_m);
-                        F32 entity_max_x = entity_min_x + 
-                                        (entity_w * game_state->px_per_m);
+                    F32 entity_min_x = screen_offset.x + 
+                                    (entity_chunk_pos.x * game_state->px_per_m) -
+                                    (low->width / 2 * game_state->px_per_m);
+                    F32 entity_max_x = entity_min_x + 
+                                    (entity_w * game_state->px_per_m);
 
-                        F32 entity_max_y = screen_offset.y + 
-                                        (world->chunk_side_in_m * game_state->px_per_m) - 
-                                        (entity_chunk_pos.y * game_state->px_per_m) + 
-                                        (low->height / 2 * game_state->px_per_m);
-                        F32 entity_min_y = entity_max_y - 
-                                        (entity_h * game_state->px_per_m);
+                    F32 entity_max_y = screen_offset.y + 
+                                    (world->chunk_side_in_m * game_state->px_per_m) - 
+                                    (entity_chunk_pos.y * game_state->px_per_m) + 
+                                    (low->height / 2 * game_state->px_per_m);
+                    F32 entity_min_y = entity_max_y - 
+                                    (entity_h * game_state->px_per_m);
 
-                        F32 entity_center_x = 0.5f * (entity_max_x + entity_min_x);
-                        F32 entity_center_y = 0.5f * (entity_max_y + entity_min_y);
+                    F32 entity_center_x = 0.5f * (entity_max_x + entity_min_x);
+                    F32 entity_center_y = 0.5f * (entity_max_y + entity_min_y);
 
-                        switch (low->type) 
+                    switch (low->type) 
+                    {
+                        case Entity_type::Player: 
                         {
-                            case Entity_type::Tree: {
-                                draw_bitmap(game_state->tree_00, bitmap, 
-                                    entity_center_x, entity_center_y,
-                                    tree_00_offset.x, tree_00_offset.y
-                                );
-                            } break;
+                            Player_skin* skin;
+                            switch (player_high->direction) {
+                                case Entity_direction::Back: {
+                                    skin = &game_state->player_skin_back; 
+                                } break;
 
-                            default: {
-                                InvalidCodePath;
-                            } break;
+                                case Entity_direction::Right: {
+                                    skin = &game_state->player_skin_right; 
+                                } break;
 
-                        }
+                                case Entity_direction::Front: {
+                                    skin = &game_state->player_skin_front; 
+                                } break;
 
-                        draw_rect(bitmap, 
-                            entity_min_x, entity_min_y,
-                            entity_max_x, entity_max_y,
-                            100, 0, 0 
-                        );
+                                case Entity_direction::Left: {
+                                    skin = &game_state->player_skin_left; 
+                                } break;
+
+                                default: {
+                                    InvalidCodePath;
+                                } break;
+                            }
+                                                
+                            Vec2_F32 shadow_offset = hero_sprite_offset;
+                            F32 mid_legs_on_screen_x = screen_offset.x + 
+                                                    (player_world_pos.chunk_rel.x  * game_state->px_per_m);
+                            F32 mid_legs_on_screen_y = screen_offset.y + 
+                                                    (world->chunk_side_in_m * game_state->px_per_m) - 
+                                                    (player_world_pos.chunk_rel.y * game_state->px_per_m);
+                            
+                            draw_bitmap(game_state->player_shadow, 
+                                bitmap, 
+                                mid_legs_on_screen_x, mid_legs_on_screen_y,
+                                shadow_offset.x, shadow_offset.y); 
+                            draw_bitmap(skin->torso, 
+                                bitmap, 
+                                mid_legs_on_screen_x, mid_legs_on_screen_y,
+                                hero_sprite_offset.x, hero_sprite_offset.y); 
+                            draw_bitmap(skin->cape, 
+                                bitmap, 
+                                mid_legs_on_screen_x, mid_legs_on_screen_y,
+                                hero_sprite_offset.x, hero_sprite_offset.y);
+                            draw_bitmap(skin->head, 
+                                bitmap, 
+                                mid_legs_on_screen_x, mid_legs_on_screen_y,
+                                hero_sprite_offset.x, hero_sprite_offset.y);
+                            
+                            draw_rect(bitmap,
+                                mid_legs_on_screen_x, mid_legs_on_screen_y,
+                                mid_legs_on_screen_x, mid_legs_on_screen_y,
+                                0, 255, 0);
+                        } break;
+                        
+                        case Entity_type::Tree: 
+                        {
+                            draw_bitmap(game_state->tree_00, bitmap, 
+                                entity_center_x, entity_center_y,
+                                tree_00_offset.x, tree_00_offset.y
+                            );
+
+                            draw_rect(bitmap, 
+                                entity_min_x, entity_min_y,
+                                entity_max_x, entity_max_y,
+                                100, 0, 0 
+                            );
+                        } break;
+
+                        case Entity_type::Familiar: 
+                        {
+                            draw_bitmap(game_state->player_skin_back.head, bitmap, 
+                                entity_center_x, entity_center_y,
+                                hero_sprite_offset.x, hero_sprite_offset.y
+                            );
+                        } break;
+
+                        default: {
+                            InvalidCodePath;
+                        } break;
+
                     }
-
-                    // ===========
-                    // Vec2_F32 min_pos = rel_pos - (0.5f * vec2_f32(low->width, low->height));
-                    // Vec2_F32 max_pos = rel_pos + (0.5f * vec2_f32(low->width, low->height));
-
                 }
+
+                        
             }
 
         }
@@ -671,66 +748,6 @@ void game_update(Bitmap* bitmap,
                 min_x, min_y, 
                 max_x, max_y,
                 0, 200, 20);
-        }
-        #endif
-
-        #if 1
-        // Draw the players sprite + shadow
-        {
-            Vec2_F32 hero_sprite_offset = vec2_f32(72.0f, 182.0f);
-            Vec2_F32 shadow_offset = hero_sprite_offset;
-
-            F32 mid_legs_on_screen_x = screen_offset.x + 
-                                    (player_world_pos.chunk_rel.x  * game_state->px_per_m);
-            F32 mid_legs_on_screen_y = screen_offset.y + 
-                                    (world->chunk_side_in_m * game_state->px_per_m) - 
-                                    (player_world_pos.chunk_rel.y * game_state->px_per_m);
-
-            Player_skin* skin;
-            switch (game_state->player.direction) {
-                case Entity_direction::Back: {
-                    skin = &game_state->player_skin_back; 
-                } break;
-
-                case Entity_direction::Right: {
-                    skin = &game_state->player_skin_right; 
-                } break;
-
-                case Entity_direction::Front: {
-                    skin = &game_state->player_skin_front; 
-                } break;
-
-                case Entity_direction::Left: {
-                    skin = &game_state->player_skin_left; 
-                } break;
-
-                default: {
-                    InvalidCodePath;
-                } break;
-            }
-            
-            draw_bitmap(game_state->player_shadow, 
-                bitmap, 
-                mid_legs_on_screen_x, mid_legs_on_screen_y,
-                shadow_offset.x, shadow_offset.y); 
-            draw_bitmap(skin->torso, 
-                bitmap, 
-                mid_legs_on_screen_x, mid_legs_on_screen_y,
-                hero_sprite_offset.x, hero_sprite_offset.y); 
-            draw_bitmap(skin->cape, 
-                bitmap, 
-                mid_legs_on_screen_x, mid_legs_on_screen_y,
-                hero_sprite_offset.x, hero_sprite_offset.y);
-            draw_bitmap(skin->head, 
-                bitmap, 
-                mid_legs_on_screen_x, mid_legs_on_screen_y,
-                hero_sprite_offset.x, hero_sprite_offset.y);
-            
-            draw_rect(bitmap,
-                mid_legs_on_screen_x, mid_legs_on_screen_y,
-                mid_legs_on_screen_x, mid_legs_on_screen_y,
-                0, 255, 0);
-
         }
         #endif
 

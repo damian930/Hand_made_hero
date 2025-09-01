@@ -20,6 +20,7 @@ struct Loaded_bitmap {
 };
 // ===========================================
 
+#if 0
 struct Player {
     // NOTE: this represents the mid point of the player 
     Vec2_F32 sim_reg_rel;
@@ -29,6 +30,7 @@ struct Player {
     F32 height;
     Entity_direction direction;
 };
+#endif
 
 struct Player_skin {
     Loaded_bitmap head;
@@ -60,7 +62,7 @@ struct Game_state {
     World world;
 
     Sim_reg sim_reg;
-    Player player;
+    // Player player;
     
     Player_skin player_skin_front;
     Player_skin player_skin_back;

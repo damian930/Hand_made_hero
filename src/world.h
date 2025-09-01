@@ -24,7 +24,9 @@ namespaced_enum Entity_direction : U32 {
 };
 
 namespaced_enum Entity_type : U32 {
+    Player = 1,
     Tree,
+    Familiar,
 };
 
 struct Low_entity {
@@ -36,6 +38,9 @@ struct Low_entity {
     Vec2_F32 speed;
     F32 width;
     F32 height;
+
+    B32 has_entity_to_track;
+    U32 high_entity_to_track_index;
 };
 
 // NOTE: these are camera_pos relative 
@@ -82,6 +87,8 @@ struct World {
     U32 high_entity_count;
     
     Chunk_list chunk_lists[1024];
+    
+    U32 player_low_index;
 };
 
 

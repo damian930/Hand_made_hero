@@ -81,16 +81,23 @@ Vec3_U32 vec3_u32(U32 x, U32 y, U32 z) {
 
 // ============
 
+Vec2_F32 vec2_f32_squared(Vec2_F32 vec) {
+    Vec2_F32 result = {};
+    result.x = Square(vec.x);
+    result.x = Square(vec.y);
+    return result;
+}
+
 F32 vec2_f32_len_squared(Vec2_F32 vec) {
     F32 result = Square(vec.x) + Square(vec.y);
     return result;
 }
 
-// F32 vec2_f32_len(Vec2_F32 vec) {
-//     F32 result = vec2_f32_len_sqrd(vec);
-//     result = sqrtf(result);
-//     return result;
-// }   
+F32 vec2_f32_len(Vec2_F32 vec) {
+    F32 result = vec2_f32_len_squared(vec);
+    result = sqrtf(result);
+    return result;
+}   
 
 Vec2_F32 operator+(Vec2_F32 v1, Vec2_F32 v2) {
     Vec2_F32 result = {};
