@@ -263,29 +263,6 @@ S32 floor_F32_to_S32(F32 f) {
 }
 // ================================================================
 
-// Example: 0b100100 -> returns true, idx -> 2
-B32 find_idx_of_first_least_significant_set_bit(U32 value, U32* idx) {
-    // TODO: implement using a macro + a compiler switch + a compiler specific instrisic
-
-// #if COMPILER_MSVC
-//     B32 found = _BitScanForward((unsigned long*)idx, mask);
-//     return found;
-    B32 found = false;
-    for (U32 shift=0; shift < 32; ++shift) {
-        U32 mask = (1 << shift);
-        
-        if (value & mask) {
-            *idx = shift;
-            found = true;
-            break;
-        }
-    }
-
-    return found;
-}
-
-// ============================================
-
 
 
 

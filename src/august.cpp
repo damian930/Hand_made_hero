@@ -1,5 +1,6 @@
 #include "august.h"
 #include "game_platform_comunication.h"
+#include "intrinsics.h"
 
 #include "world.cpp"
 
@@ -60,9 +61,10 @@ Loaded_bitmap load_bmp_file(Arena* arena, platform_read_file_ft read_file_fp, ch
     return result;
 }
 
-static void draw_bitmap(Loaded_bitmap loaded_bitmap, Bitmap* bitmap,
-                        float start_x_f, float start_y_f,
-                        float offset_x = 0.0f, float offset_y = 0.0f
+file_private
+void draw_bitmap(Loaded_bitmap loaded_bitmap, Bitmap* bitmap,
+                 F32 start_x_f, F32 start_y_f,
+                 F32 offset_x = 0.0f, F32 offset_y = 0.0f
 ) { 
     // NOTE: starts from the bottom left pixel and goes right and then up
 
@@ -99,7 +101,7 @@ static void draw_bitmap(Loaded_bitmap loaded_bitmap, Bitmap* bitmap,
         source_pixel += x_cut_off;
         for (S32 x = min_x; x < max_x; ++x) {
             // Find the fist set bit
-            // Aplythe mask to get teh vlaue
+            // Aply the mask to get teh vlaue
             // Shift byt the bits calculated
             // use the value to construct a new, windws specific pixel 4-byte pixel
             U32* dest_pixel = dest_row + x;
@@ -316,7 +318,7 @@ struct Time_profile {
 
 struct Frame_time_profiling_stack {
     U32 count;
-    Time_profile time_profiles[30];
+    Time_profile time_profiles[100];
 };
 
 F32 get_frame_time_ms(Some_more_platform_things_to_use* platform_things, U64 frame_start_perf_counter)
@@ -673,6 +675,9 @@ void game_update(Bitmap* bitmap,
             Chunk* chunk = get_chunk_in_world__opt(world, chunk_to_draw_mid_pos.chunk);
             Assert(chunk);
 
+            TimeProfile("Time after getting a chunk");
+
+            B32 profiled = false;
             for (U32 high_entity_index = 0;
                  high_entity_index < world->high_entity_count;
                  high_entity_index += 1
@@ -682,6 +687,8 @@ void game_update(Bitmap* bitmap,
                 Low_entity* low = &world->low_entities[high->low_index];
 
                 World_pos entity_world_pos = world_pos_from_rel_pos(world, &sim_reg->world_pos, high->sim_reg_rel);
+
+                if (!profiled) TimeProfile("Time after getting low, high, world_pos");
 
                 if (entity_world_pos.chunk == sim_reg->world_pos.chunk)
                 {
@@ -705,6 +712,12 @@ void game_update(Bitmap* bitmap,
 
                     F32 entity_center_x = 0.5f * (entity_max_x + entity_min_x);
                     F32 entity_center_y = 0.5f * (entity_max_y + entity_min_y);
+
+                    if (!profiled) TimeProfile("Time after getting all the screen coords for drawing");
+
+                    if (!profiled) {
+                        Assert(low->type == Entity_type::Player);
+                    }
 
                     switch (low->type) 
                     {
@@ -740,29 +753,40 @@ void game_update(Bitmap* bitmap,
                                                     (world->chunk_side_in_m * game_state->px_per_m) - 
                                                     (player_world_pos.chunk_rel.y * game_state->px_per_m);
                             
+                            if (!profiled) TimeProfile("Time before drawing the bitmaps for the player");
+
                             draw_bitmap(game_state->player_shadow, 
                                 bitmap, 
                                 mid_legs_on_screen_x, mid_legs_on_screen_y,
                                 shadow_offset.x, shadow_offset.y); 
+                            if (!profiled) TimeProfile("Time after the first bitmap");
+
                             draw_bitmap(skin->torso, 
                                 bitmap, 
                                 mid_legs_on_screen_x, mid_legs_on_screen_y,
                                 hero_sprite_offset.x, hero_sprite_offset.y); 
+                            if (!profiled) TimeProfile("Time after the second bitmap");
+                            
                             draw_bitmap(skin->cape, 
                                 bitmap, 
                                 mid_legs_on_screen_x, mid_legs_on_screen_y,
                                 hero_sprite_offset.x, hero_sprite_offset.y);
+                            if (!profiled) TimeProfile("Time after the third bitmap");
+                            
                             draw_bitmap(skin->head, 
                                 bitmap, 
                                 mid_legs_on_screen_x, mid_legs_on_screen_y,
                                 hero_sprite_offset.x, hero_sprite_offset.y);
-                            
+                            if (!profiled) TimeProfile("Time after the fourth bitmap");
+
                             draw_rect(bitmap,
                                 mid_legs_on_screen_x, mid_legs_on_screen_y,
                                 mid_legs_on_screen_x, mid_legs_on_screen_y,
                                 0, 255, 0);
+                            if (!profiled) TimeProfile("Time after the fifth bitmap");
 
                             draw_hitpoint(bitmap, low, vec2_f32(mid_legs_on_screen_x, mid_legs_on_screen_y));
+                            if (!profiled) TimeProfile("Time after hitpoints");
 
                         } break;
                         
@@ -788,27 +812,31 @@ void game_update(Bitmap* bitmap,
                             );
                         } break;
 
-                        default: {
-                            InvalidCodePath;
-                        } break;
-
+                        
                         case Entity_type::Sword:
                         {
                             draw_bitmap(game_state->rock03, bitmap, 
                                 entity_center_x, entity_center_y,
                                 rock03_offset.x, rock03_offset.y
                             );
-
+                            
                             draw_rect(bitmap, 
                                 entity_min_x, entity_min_y,
                                 entity_max_x, entity_max_y,
                                 100, 0, 0 
                             );
                         } break;
-
+                        
+                        default: {
+                            InvalidCodePath;
+                        } break;
                     }
                 }
 
+                if (!profiled) {
+                    profiled = true;
+                    TimeProfile("Time after drawing an entity");
+                }
                         
             }
 
@@ -920,7 +948,7 @@ void game_update(Bitmap* bitmap,
         std::fstream file;
         if (!wrote_to_file) {
             file.open(file_name, std::ios::out | std::ios::trunc);
-            file << "MAX_FRAME_TIME: " << time_elapsed << "ms" << "\n\n";
+            file << "MAX_FRAME_TIME: " << (time_elapsed * Ms_In_Sec) << "ms" << "\n\n";
             wrote_to_file = true;
         } 
         else {
@@ -949,7 +977,8 @@ void game_update(Bitmap* bitmap,
     //
     frame_count += 1;
     arena_uninnit(&frame_arena);
-
+    
+    #undef TimeProfile
 }
 
 

@@ -290,11 +290,6 @@ void construct_keyboard_input_for_the_current_frame(MSG* message, Keyboard_input
 }
 // ================================================================
 
-#if DEBUG_MODE
-global char file_with_frame_time_data_path[] = "file_with_frame_times.txt";
-global std::fstream file_with_frame_times(file_with_frame_time_data_path, std::ios::in | std::ios::out | std::ios::trunc);
-#endif
-
 int WINAPI WinMain(HINSTANCE h_instance, 
                    HINSTANCE h_prev_instance,
                    PSTR cmd_attr, 
@@ -401,14 +396,6 @@ int WINAPI WinMain(HINSTANCE h_instance,
                     ReleaseDC(window_handle, device_context);
                 }
                 
-                #if DEBUG_MODE
-                // Gettimg some debug info for the enforced frame rate
-                {
-                    Assert(file_with_frame_times.is_open());                    
-                    file_with_frame_times << std::to_string(frame_time) << "\n" << std::endl;
-                }
-                #endif
-    
             }
 
         }
@@ -419,12 +406,6 @@ int WINAPI WinMain(HINSTANCE h_instance,
     else {
         // TODO: handle
     }
-
-    #if 0 //DEBUG_MODE
-    Assert(file_with_frame_times.is_open());                    
-    file_with_frame_times.close();
-    #endif
-
 
     return 0;
 }
