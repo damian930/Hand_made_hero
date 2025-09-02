@@ -101,6 +101,14 @@ PlatformSpecificWritefileF(DEBUG_win32_write_file) {
     return result;
 }
 
+PlatformSpecificGetPerfCounter(DEBUG_win32_get_perf_counter)
+{
+    LARGE_INTEGER large_int = {};
+    B32 err = QueryPerformanceCounter(&large_int);
+    Assert(err);
+    return large_int.QuadPart;
+}
+
 // ===============================================================
 
 struct Win32_bitmap {
@@ -282,13 +290,6 @@ void construct_keyboard_input_for_the_current_frame(MSG* message, Keyboard_input
 }
 // ================================================================
 
-U64 get_perf_counter() {
-    LARGE_INTEGER large_int = {};
-    B32 err = QueryPerformanceCounter(&large_int);
-    Assert(err);
-    return large_int.QuadPart;
-}
-
 #if DEBUG_MODE
 global char file_with_frame_time_data_path[] = "file_with_frame_times.txt";
 global std::fstream file_with_frame_times(file_with_frame_time_data_path, std::ios::in | std::ios::out | std::ios::trunc);
@@ -347,7 +348,7 @@ int WINAPI WinMain(HINSTANCE h_instance,
 
             while(running) 
             {
-                U64 frame_start_counter = get_perf_counter();
+                U64 frame_start_counter = DEBUG_win32_get_perf_counter();
 
                 MSG message;
                 while(PeekMessage(&message, window_handle, NULL, NULL, PM_REMOVE))
@@ -377,15 +378,17 @@ int WINAPI WinMain(HINSTANCE h_instance,
                     Some_more_platform_things_to_use platform_things = {};
                     platform_things.read_file_fp  = DEBUG_win32_read_file;
                     platform_things.write_file_fp = DEBUG_win32_write_file;
+                    platform_things.get_perf_counter    = DEBUG_win32_get_perf_counter;
+                    platform_things.perf_counts_per_sec = perf_counter_per_sec;
 
                     game_update(&game_bitmap, &game_mem, &keyboard_input, &platform_things, max_sec_per_frame);
                 }
 
                 // Enforcing frame rate
-                U64 frame_counter = get_perf_counter();
+                U64 frame_counter = DEBUG_win32_get_perf_counter();
                 F32 frame_time = (F32)(frame_counter - frame_start_counter) / perf_counter_per_sec;
                 while (frame_time < max_sec_per_frame) {
-                    frame_counter = get_perf_counter();
+                    frame_counter = DEBUG_win32_get_perf_counter();
                     frame_time = (F32)(frame_counter - frame_start_counter) / perf_counter_per_sec; 
                 }
 
@@ -417,7 +420,7 @@ int WINAPI WinMain(HINSTANCE h_instance,
         // TODO: handle
     }
 
-    #if DEBUG_MODE
+    #if 0 //DEBUG_MODE
     Assert(file_with_frame_times.is_open());                    
     file_with_frame_times.close();
     #endif

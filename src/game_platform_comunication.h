@@ -37,11 +37,8 @@ typedef PlatformSpecificWritefileF(platform_write_file_ft);
 
 // =========================================================
 
-struct Timer_since_boot_data {
-    U64 perf_counter_per_sec;
-};
-#define PlatformSpecificGetTimeForTimingInSec(func_name) F32 func_name (Timer_since_boot_data timer_data)
-typedef PlatformSpecificGetTimeForTimingInSec(platform_get_time_for_timing_in_sec_ft);
+#define PlatformSpecificGetPerfCounter(func_name) U64 func_name ()
+typedef PlatformSpecificGetPerfCounter(platform_get_perf_counter);
 
 // =========================================================
 
@@ -79,9 +76,8 @@ struct Some_more_platform_things_to_use {
     platform_read_file_ft* read_file_fp;
     platform_write_file_ft* write_file_fp;    
 
-    // platform_get_time_for_timing_in_sec_ft* get_time_for_timing_in_sec;
-    // Timer_since_boot_data timer_data;
-    // F32 frame_start_time;
+    platform_get_perf_counter* get_perf_counter;
+    U64 perf_counts_per_sec;
 };
 
 

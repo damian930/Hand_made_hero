@@ -16,6 +16,8 @@ typedef uint64_t U64;
 typedef float  F32;
 typedef double F64;
 
+typedef char C8;
+
 typedef S32 B32;
 
 #define file_private static
@@ -28,6 +30,8 @@ typedef S32 B32;
 #define Megabytes_U32(value) ((U32)1024 * Kilobytes_U32(value))
 #define Gigabytes_U32(value) ((U32)1024 * Megabytes_U32(value))
 #define Terabytes_U32(value) ((U32)1024 * Gigabytes_U32(value))  
+
+#define Ms_In_Sec 1000
 
 #define Assert(expr) if (!(expr))  { *((U8*)0) = 69; }
 
@@ -58,8 +62,8 @@ void arena_uninnit(Arena* arena) {
     arena->pos  = 0;
     arena->cap  = 0;
 }
-void* arena_push(Arena* arena, U32 size);
-void* arena_push(Arena* arena, U32 size) {
+void* arena_push_nozero(Arena* arena, U32 size);
+void* arena_push_nozero(Arena* arena, U32 size) {
     Assert(arena->pos + size < arena->cap);
 
     void* result = (void*)(arena->base + arena->pos);
@@ -67,10 +71,66 @@ void* arena_push(Arena* arena, U32 size) {
 
     return result;
 }
+void* arena_push(Arena* arena, U32 size);
+void* arena_push(Arena* arena, U32 size) {
+    U8* mem = (U8*) arena_push_nozero(arena, size);
+    
+    for (U32 i = 0; i < size; i += 1) {
+        mem[i] = 0;
+    }
+
+    return (void*)mem;
+}
+
 #define ArenaPush(arena_p, type)           (type*) arena_push(arena_p, sizeof(type))
 #define ArenaPushArr(arena_p, type, count) (type*) arena_push(arena_p, sizeof(type) * count)
 // ================================================================
 
+
+///////////////////////////////////////////////////////////
+// Damian: String stuff
+//
+struct String8 {
+    U8* str;
+    U64 count;
+};
+
+file_private
+U64 c_string_len(C8* c_string)
+{
+    U64 len = 0;
+
+}
+
+file_private
+String8 string8_from_clit(Arena* arena, C8* c_string, U64 c_string_len)
+{
+    U8* str8 = ArenaPushArr(arena, U8, c_string_len - 1);
+    
+    for (U64 i = 0; i < c_string_len - 1; i += 1) {
+        str8[i] = c_string[i];
+    }
+
+    String8 result = {};
+    result.str = str8;
+    result.count = c_string_len - 1;
+    
+    return result;
+}
+
+#define String8FromClit(arena_p, c_lit) string8_from_clit(arena_p, (C8*)c_lit, ArrayCount(c_lit)) 
+
+U8* cstr_from_string8(Arena* arena, String8* str8)
+{
+    U8* c_str = ArenaPushArr(arena, U8, str8->count + 1);
+    for (U64 i = 0; i < str8->count; i += 1)
+    {
+        c_str[i] = str8->str[i];
+    }
+    c_str[str8->count] = '\0';
+
+    return c_str;
+}
 
 // == Arrays
 // NOTE: this is here for now
@@ -88,9 +148,6 @@ void* arena_push(Arena* arena, U32 size) {
 #define StackPush(top_node_p, new_node_p) new_node_p->prev = top_node_p; \
                                           top_node_p = new_node_p;
 // ========================================================
-
-
-
 
 
 

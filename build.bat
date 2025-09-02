@@ -3,7 +3,7 @@
 call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat"
 cls
 
-set COMPILER_FLAGS="/DDEBUG_MODE=0"
+set COMPILER_FLAGS="/DDEBUG_MODE=1"
 set LINKWE_FALAGS=""
 
 if not exist build mkdir build

@@ -4,6 +4,9 @@
 #include "world.cpp"
 
 // TODO: remove the incude and chnage all the windows types inside Loaded_bitmap
+#include <fstream>
+using std::fstream;
+
 #include "windows.h"
 // ==============================
 #if 1
@@ -303,8 +306,57 @@ B32 get_time_of_reach(F32 start_coord,
 }
 // ================================================
 
-// ===============
+///////////////////////////////////////////////////////////
+// Damian: some things to do profiling stuff on the update and render code
+//
+struct Time_profile {
+    F32 frame_time;
+    String8 note;
+};
+
+struct Frame_time_profiling_stack {
+    U32 count;
+    Time_profile time_profiles[30];
+};
+
+F32 get_frame_time_ms(Some_more_platform_things_to_use* platform_things, U64 frame_start_perf_counter)
+{
+    U64 current_perf_counter = platform_things->get_perf_counter();
+    F32 frame_time_sec = (F32)(current_perf_counter - frame_start_perf_counter) / platform_things->perf_counts_per_sec; 
+    return (frame_time_sec * Ms_In_Sec);
+}
+
+void push_profile(Frame_time_profiling_stack* stack, Time_profile profile)
+{
+    Assert(stack->count < ArrayCount(stack->time_profiles));
+    stack->time_profiles[stack->count++] = profile;
+}
+
+void clear_profiler_stack(Frame_time_profiling_stack* stack)
+{
+    stack->count = 0;
+}
+
+void time_profile(Arena* arena,
+                  String8 note,
+                  Frame_time_profiling_stack* stack, 
+                  Some_more_platform_things_to_use* platform_things, 
+                  U64 frame_start_perf_counter
+) {
+    F32 frame_time = get_frame_time_ms(platform_things, frame_start_perf_counter);
+
+    Time_profile new_profile = {};
+    new_profile.frame_time = frame_time;
+    new_profile.note = note;
+
+    push_profile(stack, new_profile);
+}
+
+///////////////////////////////////////////////////////////
+// Damian: game update loop
+//
 global B32 wrote_to_file = false;
+global U32 frame_count = 0;
 
 void game_update(Bitmap* bitmap, 
                  Memory* mem, 
@@ -312,15 +364,9 @@ void game_update(Bitmap* bitmap,
                  Some_more_platform_things_to_use* platform_things,
                  F32 time_elapsed
 ) {
-
-#if 0
-    // These are for some simple DEBUG of performance based on time
-    F32 frame_start_time = platform_things->frame_start_time;
-    platform_get_time_for_timing_in_sec_ft* get_time_in_sec = platform_things->get_time_for_timing_in_sec;
-    Timer_since_boot_data timer_data = platform_things->timer_data;
-#endif
-
-    // Setting up the game_state when the game is first updated
+    ///////////////////////////////////////////////////////////
+    // Damian: setting up the game_state when the game is firts updated
+    //
     Game_state* game_state = (Game_state*)mem->permanent_mem;
     if (!game_state->is_initialised)
     {
@@ -454,11 +500,16 @@ void game_update(Bitmap* bitmap,
     ///////////////////////////////////////////////////////////
     // Damian: some game_state unwrapped struxt for easier referencing
     //
+    Arena frame_arena = arena_init(mem->frame_mem, mem->frame_mem_size);
+
     World* world             = &game_state->world;
     Sim_reg* sim_reg         = &game_state->sim_reg;
     Low_entity* player_low   = get_low_entity(world, world->player_low_index);
     Assert(player_low->is_also_high);
     High_entity* player_high = &world->high_entities[player_low->high_idx];
+    
+    Frame_time_profiling_stack profiling_stack = {};
+    U64 frame_start_perf_count = platform_things->get_perf_counter();
 
     ///////////////////////////////////////////////////////////
     // Damian: getting data to then move the player
@@ -530,12 +581,16 @@ void game_update(Bitmap* bitmap,
             }
         #endif
         
-        }        
+        }      
+
+        time_profile(&frame_arena, String8FromClit(&frame_arena, "Time after keyboard inputs processing"),
+                     &profiling_stack, platform_things, frame_start_perf_count);
 
         F32 player_acceleration_mult = 225;
         move_entity(game_state,
             world->player_low_index, 
             time_elapsed, acceleration_unit_vec, player_acceleration_mult);
+    
     }
 
     ///////////////////////////////////////////////////////////
@@ -838,6 +893,44 @@ void game_update(Bitmap* bitmap,
         #endif
                 
     }
+    
+    ///////////////////////////////////////////////////////////
+    // Damian: writing the frame profiling data to the file
+    //         for now using the std::io since i dont have my own
+    //
+    #if DEBUG_MODE 
+    {
+        C8 file_name[] = "frame_time_profiles.txt";
+
+        std::fstream file;
+        if (!wrote_to_file) {
+            file.open(file_name, std::ios::out | std::ios::trunc);
+            wrote_to_file = true;
+        } 
+        else {
+            file.open(file_name, std::ios::out | std::ios::app);
+        }
+        Assert(file.is_open());
+        
+        // Write here
+        
+        for (U32 i = 0; i < profiling_stack.count; i += 1)
+        {
+            Time_profile* profile = &profiling_stack.time_profiles[i];
+            U8* note_as_c_str = cstr_from_string8(&frame_arena, &profile->note);
+            file << note_as_c_str << " ---> " << profile->frame_time << "\n\n";
+        }
+        
+        file.close();
+    }
+    #endif
+
+    // NOTE: there might be a problem with arena clearing, that next time data might not be zero initiated by default, since it has already been used
+
+    ///////////////////////////////////////////////////////////
+    // Damian: Clearing out resources
+    //
+    arena_uninnit(&frame_arena);
 
 }
 
