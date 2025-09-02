@@ -39,6 +39,9 @@ struct Low_entity {
     F32 width;
     F32 height;
 
+    B32 has_hp;
+    U32 hp;
+
     B32 has_entity_to_track;
     U32 high_entity_to_track_index;
 };

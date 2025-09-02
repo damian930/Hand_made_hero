@@ -250,12 +250,46 @@ file_private void draw_rect(Bitmap* bitmap,
     }
 } 
 
+void draw_hitpoint(Bitmap* bitmap, Low_entity* low, Vec2_F32 base_screen_pos)
+{
+    if (low->has_hp && low->hp != 0) 
+    {
+        Vec2_F32 hp_line_center = base_screen_pos;
+        Vec2_F32 hp_dims = vec2_f32(10.0f, 10.0f);
+        F32 h_space_between_hp = 5.0f;
+        F32 h_jump_between_hp = (0.5f * h_space_between_hp) + (0.5f * hp_dims.x);
+        Vec2_F32 draw_offset = vec2_f32(0.0f, 10.0f);
+
+        Vec2_F32 most_left_hp_min;
+        {
+            most_left_hp_min = hp_line_center - (hp_dims / 2);
+            for (U32 i = 1; i<low->hp; i += 1) 
+            {
+                most_left_hp_min.x -= h_jump_between_hp;
+            }
+        }
+
+        for (U32 i = 1; i<=low->hp; i += 1)
+        {
+            Vec2_F32 hp_min = most_left_hp_min + draw_offset;
+
+            most_left_hp_min.x += hp_dims.x;
+            most_left_hp_min.x += h_space_between_hp;
+
+            draw_rect(bitmap,
+                        hp_min.x, hp_min.y,
+                        hp_min.x + hp_dims.x, hp_min.y + hp_dims.y,
+                        255, 0, 0);
+        }
+    }
+}
+
 // == Working Collision for tiles ===============
 
 B32 get_time_of_reach(F32 start_coord,
-                       F32 wall_coord,
-                       F32 displacement_coord,
-                       F32* travel_time_normalized
+                      F32 wall_coord,
+                      F32 displacement_coord,
+                      F32* travel_time_normalized
 ) {
     if (displacement_coord == 0.0f) {
         // We cant hit the inf wall, yeah... 
@@ -531,8 +565,8 @@ void game_update(Bitmap* bitmap,
     // Damian: drawing the world
     //
     {
-        // Some constant used for drawing
-        
+        ///////////////////////////////////////////////////////////
+        // Damian: some constans used for drawing
         Vec2_F32 screen_offset     = vec2_f32(200.0f, 100.0f);
         World_pos player_world_pos = world_pos_from_rel_pos(world, &sim_reg->world_pos, player_high->sim_reg_rel);
         Assert(player_world_pos.chunk == sim_reg->world_pos.chunk);
@@ -642,6 +676,9 @@ void game_update(Bitmap* bitmap,
                                 mid_legs_on_screen_x, mid_legs_on_screen_y,
                                 mid_legs_on_screen_x, mid_legs_on_screen_y,
                                 0, 255, 0);
+
+                            draw_hitpoint(bitmap, low, vec2_f32(mid_legs_on_screen_x, mid_legs_on_screen_y));
+
                         } break;
                         
                         case Entity_type::Tree: 
@@ -751,7 +788,7 @@ void game_update(Bitmap* bitmap,
         }
         #endif
 
-        #if 0
+        #if 1
         // Draw the base point of the player
         {
             F32 player_base_on_screen_x = screen_offset.x + 
@@ -759,10 +796,11 @@ void game_update(Bitmap* bitmap,
             F32 player_base_on_screen_y = screen_offset.y + 
                                         (world->chunk_side_in_m * game_state->px_per_m) - 
                                         (player_world_pos.chunk_rel.y * game_state->px_per_m);
+            Vec2_F32 base_dims = vec2_f32(1.0f);
             draw_rect(bitmap, 
                 player_base_on_screen_x, player_base_on_screen_y,
-                player_base_on_screen_x + 3, player_base_on_screen_y + 3,
-                255, 0, 0); 
+                player_base_on_screen_x + base_dims.x, player_base_on_screen_y + base_dims.y,
+                0, 255, 0); 
         } 
         #endif
                 

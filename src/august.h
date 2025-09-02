@@ -62,7 +62,6 @@ struct Game_state {
     World world;
 
     Sim_reg sim_reg;
-    // Player player;
     
     Player_skin player_skin_front;
     Player_skin player_skin_back;

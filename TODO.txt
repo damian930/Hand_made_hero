@@ -1,10 +1,14 @@
 === Platform
+-- ...
 
 === Game
+-- ...
 
-===
+=== Code
+-- Improve the build: have more errors, warning shown and stuff like that
+
 === Current Goal
-
+-- ...
 
 === Stuff that workd but i need to fix it 
 -- Collission is sometimes buggy

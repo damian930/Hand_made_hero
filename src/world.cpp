@@ -319,16 +319,11 @@ void load_chunk(Arena* world_arena, World* world, Camera_* camera, Vec2_S32 chun
 }
 #endif
 
-void spawn_entity(Game_state* game_state, Low_entity new_low_entity
-                //   World_pos entt_mid_pos, 
-                //   F32 entt_width, F32 entt_height, 
-                //   Entity_type entt_type,
-                //   Vec2_F32 entt_speed,
-                //   U32 high_entity_to_track_index
-) {
+void spawn_entity(Game_state* game_state, Low_entity new_low_entity) 
+{
     Arena* world_arena = &game_state->arena;
-    World* world = &game_state->world;
-    Sim_reg* sim_reg = &game_state->sim_reg;
+    World* world       = &game_state->world;
+    Sim_reg* sim_reg   = &game_state->sim_reg;
 
     Assert(world->low_entity_count < ArrayCount(world->low_entities));
     Chunk* chunk = get_chunk_in_world__spawns(world_arena, world, new_low_entity.world_pos.chunk);
@@ -379,6 +374,8 @@ void spawn_player(Game_state* game_state, World_pos player_mid_pos)
     new_entity.speed     = vec2_f32(0.0f, 0.0f);
     new_entity.world_pos = player_mid_pos;
     new_entity.type      = Entity_type::Player;
+    new_entity.has_hp    = true;
+    new_entity.hp        = 3;
 
     spawn_entity(game_state, new_entity);
 }
