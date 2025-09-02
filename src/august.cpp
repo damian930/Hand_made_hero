@@ -356,7 +356,7 @@ void time_profile(Arena* arena,
 // Damian: game update loop
 //
 global B32 wrote_to_file = false;
-global U32 frame_count = 0;
+global U32 frame_count = 1;
 
 void game_update(Bitmap* bitmap, 
                  Memory* mem, 
@@ -508,8 +508,15 @@ void game_update(Bitmap* bitmap,
     Assert(player_low->is_also_high);
     High_entity* player_high = &world->high_entities[player_low->high_idx];
     
+    ///////////////////////////////////////////////////////////
+    // Damian: things to time profile profile 
+    //
     Frame_time_profiling_stack profiling_stack = {};
     U64 frame_start_perf_count = platform_things->get_perf_counter();
+
+    #define TimeProfile(note) time_profile(&frame_arena, \
+                                String8FromClit(&frame_arena, note), \
+                                &profiling_stack, platform_things, frame_start_perf_count);
 
     ///////////////////////////////////////////////////////////
     // Damian: getting data to then move the player
@@ -583,14 +590,14 @@ void game_update(Bitmap* bitmap,
         
         }      
 
-        time_profile(&frame_arena, String8FromClit(&frame_arena, "Time after keyboard inputs processing"),
-                     &profiling_stack, platform_things, frame_start_perf_count);
-
+        TimeProfile("Time after processing keyboard inputs");
+        
         F32 player_acceleration_mult = 225;
         move_entity(game_state,
             world->player_low_index, 
             time_elapsed, acceleration_unit_vec, player_acceleration_mult);
-    
+
+        TimeProfile("Time after moving the player entity");
     }
 
     ///////////////////////////////////////////////////////////
@@ -632,7 +639,9 @@ void game_update(Bitmap* bitmap,
                 InvalidCodePath;
             } break;
         }
-    }        
+    }       
+    
+    TimeProfile("Time after updating all the high entities");
 
     ///////////////////////////////////////////////////////////
     // Damian: drawing the world
@@ -648,6 +657,8 @@ void game_update(Bitmap* bitmap,
         Vec2_F32 rock03_offset        =  vec2_f32(28.0f, 11.0f);
         
         draw_black_screen(game_state, bitmap);
+
+        TimeProfile("Time after blitting the screen");
 
         #if 1
         // Draw the map (Entities on the map)
@@ -803,6 +814,8 @@ void game_update(Bitmap* bitmap,
 
         }
         #endif
+
+        TimeProfile("Time after drawing the world");
             
         // TODO: fix this, this doesnt draw if the player is outside of the box of the ga
             
@@ -893,6 +906,8 @@ void game_update(Bitmap* bitmap,
         #endif
                 
     }
+
+    TimeProfile("Time at frame clean up");
     
     ///////////////////////////////////////////////////////////
     // Damian: writing the frame profiling data to the file
@@ -905,6 +920,7 @@ void game_update(Bitmap* bitmap,
         std::fstream file;
         if (!wrote_to_file) {
             file.open(file_name, std::ios::out | std::ios::trunc);
+            file << "MAX_FRAME_TIME: " << time_elapsed << "ms" << "\n\n";
             wrote_to_file = true;
         } 
         else {
@@ -912,14 +928,15 @@ void game_update(Bitmap* bitmap,
         }
         Assert(file.is_open());
         
-        // Write here
-        
+
+        file << "Frame " << frame_count << ": \n";
         for (U32 i = 0; i < profiling_stack.count; i += 1)
         {
             Time_profile* profile = &profiling_stack.time_profiles[i];
             U8* note_as_c_str = cstr_from_string8(&frame_arena, &profile->note);
-            file << note_as_c_str << " ---> " << profile->frame_time << "\n\n";
+            file << "  " << note_as_c_str << " ---> " << profile->frame_time << "ms" << "\n";
         }
+        file << "\n";
         
         file.close();
     }
@@ -930,6 +947,7 @@ void game_update(Bitmap* bitmap,
     ///////////////////////////////////////////////////////////
     // Damian: Clearing out resources
     //
+    frame_count += 1;
     arena_uninnit(&frame_arena);
 
 }
