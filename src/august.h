@@ -63,6 +63,9 @@ struct Game_state {
 
     Sim_reg sim_reg;
     
+    // NOTE: this is here for now
+    B32 does_sword_exist;
+
     Player_skin player_skin_front;
     Player_skin player_skin_back;
     Player_skin player_skin_left;
@@ -71,6 +74,8 @@ struct Game_state {
     Loaded_bitmap player_shadow;
     Loaded_bitmap tree_00;
     Loaded_bitmap backdrop;
+    Loaded_bitmap rock03;
+
 };
 // ================================================================
 

@@ -27,6 +27,7 @@ namespaced_enum Entity_type : U32 {
     Player = 1,
     Tree,
     Familiar,
+    Sword,
 };
 
 struct Low_entity {
@@ -38,6 +39,8 @@ struct Low_entity {
     Vec2_F32 speed;
     F32 width;
     F32 height;
+
+    B32 can_colide;
 
     B32 has_hp;
     U32 hp;

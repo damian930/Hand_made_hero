@@ -1,7 +1,6 @@
 #include "world.h"
 #include "august.h"
 
-
 ///////////////////////////////////////////////////////////
 // Damian: Chunk stuff
 //
@@ -369,26 +368,27 @@ void spawn_entity(Game_state* game_state, Low_entity new_low_entity)
 void spawn_player(Game_state* game_state, World_pos player_mid_pos)
 { 
     Low_entity new_entity = {};
-    new_entity.width     = 1.95f;
-    new_entity.height    = 0.55f;
-    new_entity.speed     = vec2_f32(0.0f, 0.0f);
-    new_entity.world_pos = player_mid_pos;
-    new_entity.type      = Entity_type::Player;
-    new_entity.has_hp    = true;
-    new_entity.hp        = 3;
+    new_entity.width      = 1.95f;
+    new_entity.height     = 0.55f;
+    new_entity.speed      = vec2_f32(0.0f, 0.0f);
+    new_entity.world_pos  = player_mid_pos;
+    new_entity.type       = Entity_type::Player;
+    new_entity.has_hp     = true;
+    new_entity.hp         = 3;
+    new_entity.can_colide = true;
 
     spawn_entity(game_state, new_entity);
 }
 
-
 void spawn_tree(Game_state* game_state, World_pos tree_mid_pos) 
 { 
     Low_entity new_entity = {};
-    new_entity.width     = 1.0f;
-    new_entity.height    = 1.0f;
-    new_entity.speed     = vec2_f32(0.0f, 0.0f);
-    new_entity.world_pos = tree_mid_pos;
-    new_entity.type      = Entity_type::Tree;
+    new_entity.width      = 1.0f;
+    new_entity.height     = 1.0f;
+    new_entity.speed      = vec2_f32(0.0f, 0.0f);
+    new_entity.world_pos  = tree_mid_pos;
+    new_entity.type       = Entity_type::Tree;
+    new_entity.can_colide = true;
 
     spawn_entity(game_state, new_entity);
 }
@@ -405,6 +405,24 @@ void spawn_familiar(Game_state* game_state,
     
     new_entity.has_entity_to_track = true;
     new_entity.high_entity_to_track_index = high_entity_to_track_index;
+
+    spawn_entity(game_state, new_entity);
+}
+
+void spawn_sword(Game_state* game_state, World_pos sword_world_pos) 
+{ 
+    if (game_state->does_sword_exist) {
+        return;
+    }
+    game_state->does_sword_exist = true;
+
+    Low_entity new_entity = {};
+    new_entity.width      = 1.0f;
+    new_entity.height     = 1.0f;
+    new_entity.speed      = vec2_f32(0.0f, 0.0f);
+    new_entity.world_pos  = sword_world_pos;
+    new_entity.type       = Entity_type::Sword;
+    new_entity.can_colide = true;
 
     spawn_entity(game_state, new_entity);
 }
@@ -562,14 +580,14 @@ B32 fix_sim_reg_world_invariant(Arena* world_arena,
 }
 
 ///////////////////////////////////////////////////////////
-// Damian: move the player stuff 
-struct Ray_intersection_result {
+// Damian: move the player stuff struct 
+#if 0
+Ray_intersection_result {
     B32 alredy_colliding;
     B32 will_colide;
     F32 travel_time_normalized;
 };
-
-Ray_intersection_result get_ray_intersection_result(
+Ray_intersection_result __get_ray_intersection_result(
     F32 start_main_coord, F32 start_other_coord,
     F32 displacement_main_coord, F32 displacement_other_coord, 
     F32 wall_main_coord,
@@ -628,117 +646,127 @@ void move_entity(Game_state* game_state,
     Vec2_F32 displacement = (a/2 * t*t) + (low->speed * t);
     new_speed /= 1.5f; // NOTE: this is something like friction but a very vanila hardcoded version
 
-    if (displacement != vec2_f32(0.0f, 0.0f))
+    if (   displacement != vec2_f32(0.0f, 0.0f)) 
     {
         Vec2_S32 min_high_chunk = sim_reg->world_pos.chunk - vec2_s32(sim_reg->chunks_from_mid_chunk);
         Vec2_S32 max_high_chunk = sim_reg->world_pos.chunk + vec2_s32(sim_reg->chunks_from_mid_chunk);
-
+        
         // We are trying to get these values in the following loop
         F32 min_time = 1.0f;
         Vec2_S32 wall_hit_direction = {};
 
-        for (S32 high_chunk_y = min_high_chunk.y;
-             high_chunk_y <= max_high_chunk.y;
-             high_chunk_y += 1     
+        if (low->can_colide)
+        {
+            for (S32 high_chunk_y = min_high_chunk.y;
+                high_chunk_y <= max_high_chunk.y;
+                high_chunk_y += 1     
             ) {
                 for (S32 high_chunk_x = min_high_chunk.x;
-                     high_chunk_x <= max_high_chunk.x;
-                     high_chunk_x += 1     
+                        high_chunk_x <= max_high_chunk.x;
+                        high_chunk_x += 1     
                 ) {
                     Chunk* chunk = get_chunk_in_world__opt(world, vec2_s32(high_chunk_x, high_chunk_y));
                     Assert(chunk) // NOTE: it has to be created , sine we should be able to be moving outside the sim reg for now, and when we have sim reg, all the things insifde of it are supposed to alredy exist
                     Entity_block* test_first_block = &chunk->entity_block;
 
                     for (Entity_block* block_it = test_first_block;
-                         block_it != 0;
-                         block_it = block_it->next_block     
+                            block_it != 0;
+                            block_it = block_it->next_block     
                     ) {
                         for (U32 low_idx = 0;
-                             low_idx < block_it->low_indexes_count;
-                             low_idx += 1     
+                                low_idx < block_it->low_indexes_count;
+                                low_idx += 1     
                         ) { 
                             Low_entity* test_low = get_low_entity_from_entity_block(world, block_it, low_idx);
                             Assert(test_low->is_also_high);
                             High_entity* test_high = &world->high_entities[test_low->high_idx];
-                            
-                            Vec2_F32 test_entity_half_dim = 0.5f * vec2_f32(test_low->width, test_low->height);
-                            Vec2_F32 player_half_dim = 0.5f * vec2_f32(low->width, low->height);
-                            Vec2_F32 gjk_radius_dims = test_entity_half_dim + player_half_dim; 
+        
+                            if (test_low->type == Entity_type::Tree) {
+                                DebugStopHere;
+                            }
+
+                            if (test_low->can_colide) 
+                            {
+                                Vec2_F32 test_entity_half_dim = 0.5f * vec2_f32(test_low->width, test_low->height);
+                                Vec2_F32 player_half_dim = 0.5f * vec2_f32(low->width, low->height);
+                                Vec2_F32 gjk_radius_dims = test_entity_half_dim + player_half_dim; 
+                        
+                                Vec2_F32 enitity_min = test_high->sim_reg_rel - gjk_radius_dims;
+                                Vec2_F32 enitity_max = test_high->sim_reg_rel + gjk_radius_dims; 
+                                F32 eps = 0.1;
                     
-                            Vec2_F32 enitity_min = test_high->sim_reg_rel - gjk_radius_dims;
-                            Vec2_F32 enitity_max = test_high->sim_reg_rel + gjk_radius_dims; 
-                            F32 eps = 0.1;
-                
-                            Ray_intersection_result right_wall_coll;
-                            {
-                                F32 right_wall_main_coord = enitity_max.x + eps;
-                                right_wall_coll = get_ray_intersection_result(
-                                    high->sim_reg_rel.x, high->sim_reg_rel.y,
-                                    displacement.x, displacement.y, 
-                                    right_wall_main_coord,
-                                    enitity_min.y, enitity_max.y
-                                );
-                            }
-                
-                            Ray_intersection_result left_wall_coll;
-                            {
-                                F32 left_wall_main_coord = enitity_min.x - eps;
-                                left_wall_coll = get_ray_intersection_result(
-                                    high->sim_reg_rel.x, high->sim_reg_rel.y,
-                                    displacement.x, displacement.y, 
-                                    left_wall_main_coord,
-                                    enitity_min.y, enitity_max.y
-                                );
-                            }
-                
-                            Ray_intersection_result top_wall_coll;
-                            {
-                                F32 top_wall_main_coord = enitity_max.y + eps;
-                                top_wall_coll = get_ray_intersection_result(
-                                    high->sim_reg_rel.y, high->sim_reg_rel.x,
-                                    displacement.y, displacement.x, 
-                                    top_wall_main_coord,
-                                    enitity_min.x, enitity_max.x
-                                );
-                            }
-                
-                            Ray_intersection_result bottom_wall_coll;
-                            {
-                                F32 bottom_wall_main_coord = enitity_min.y - eps;
-                                bottom_wall_coll = get_ray_intersection_result(
-                                    high->sim_reg_rel.y, high->sim_reg_rel.x,
-                                    displacement.y, displacement.x, 
-                                    bottom_wall_main_coord,
-                                    enitity_min.x, enitity_max.x
-                                );
-                            }
-                
-                            B32 collided = false;
-                            if (right_wall_coll.will_colide) {
-                                min_time = Min(min_time, right_wall_coll.travel_time_normalized);
-                                collided = true;
-                            }
-                            if (left_wall_coll.will_colide) {
-                                min_time = Min(min_time, left_wall_coll.travel_time_normalized);
-                                collided = true;
-                            }
-                            if (top_wall_coll.will_colide) {
-                                min_time = Min(min_time, top_wall_coll.travel_time_normalized);
-                                collided = true;
-                            }
-                            if (bottom_wall_coll.will_colide) {
-                                min_time = Min(min_time, bottom_wall_coll.travel_time_normalized);
-                                collided = true;
-                            }
-                
-                            if (!collided) {
-                                if (   (displacement.x > 0 && left_wall_coll.alredy_colliding) 
-                                    || (displacement.x < 0 && right_wall_coll.alredy_colliding) 
-                                    || (displacement.y > 0 && bottom_wall_coll.alredy_colliding) 
-                                    || (displacement.y < 0 && top_wall_coll.alredy_colliding)
-                                ) {
-                                    min_time = 0.0f;
+                                Ray_intersection_result right_wall_coll;
+                                {
+                                    F32 right_wall_main_coord = enitity_max.x + eps;
+                                    right_wall_coll = get_ray_intersection_result(
+                                        high->sim_reg_rel.x, high->sim_reg_rel.y,
+                                        displacement.x, displacement.y, 
+                                        right_wall_main_coord,
+                                        enitity_min.y, enitity_max.y
+                                    );
                                 }
+                    
+                                Ray_intersection_result left_wall_coll;
+                                {
+                                    F32 left_wall_main_coord = enitity_min.x - eps;
+                                    left_wall_coll = get_ray_intersection_result(
+                                        high->sim_reg_rel.x, high->sim_reg_rel.y,
+                                        displacement.x, displacement.y, 
+                                        left_wall_main_coord,
+                                        enitity_min.y, enitity_max.y
+                                    );
+                                }
+                    
+                                Ray_intersection_result top_wall_coll;
+                                {
+                                    F32 top_wall_main_coord = enitity_max.y + eps;
+                                    top_wall_coll = get_ray_intersection_result(
+                                        high->sim_reg_rel.y, high->sim_reg_rel.x,
+                                        displacement.y, displacement.x, 
+                                        top_wall_main_coord,
+                                        enitity_min.x, enitity_max.x
+                                    );
+                                }
+                    
+                                Ray_intersection_result bottom_wall_coll;
+                                {
+                                    F32 bottom_wall_main_coord = enitity_min.y - eps;
+                                    bottom_wall_coll = get_ray_intersection_result(
+                                        high->sim_reg_rel.y, high->sim_reg_rel.x,
+                                        displacement.y, displacement.x, 
+                                        bottom_wall_main_coord,
+                                        enitity_min.x, enitity_max.x
+                                    );
+                                }
+                    
+                                B32 collided = false;
+                                if (right_wall_coll.will_colide) {
+                                    min_time = Min(min_time, right_wall_coll.travel_time_normalized);
+                                    collided = true;
+                                }
+                                if (left_wall_coll.will_colide) {
+                                    min_time = Min(min_time, left_wall_coll.travel_time_normalized);
+                                    collided = true;
+                                }
+                                if (top_wall_coll.will_colide) {
+                                    min_time = Min(min_time, top_wall_coll.travel_time_normalized);
+                                    collided = true;
+                                }
+                                if (bottom_wall_coll.will_colide) {
+                                    min_time = Min(min_time, bottom_wall_coll.travel_time_normalized);
+                                    collided = true;
+                                }
+                    
+                                if (!collided) {
+                                    if (   (displacement.x > 0 && left_wall_coll.alredy_colliding) 
+                                        || (displacement.x < 0 && right_wall_coll.alredy_colliding) 
+                                        || (displacement.y > 0 && bottom_wall_coll.alredy_colliding) 
+                                        || (displacement.y < 0 && top_wall_coll.alredy_colliding)
+                                    ) {
+                                        min_time = 0.0f;
+                                    }
+                                }
+
                             }
 
                         }
@@ -746,7 +774,187 @@ void move_entity(Game_state* game_state,
 
                 }
             }
+
+        }
         
+        Vec2_F32 corrected_displacement = displacement * min_time;
+        high->sim_reg_rel += corrected_displacement;
+        if (min_time != 1.0f) {
+            low->speed = vec2_f32(0.0f, 0.0f);
+        }
+        
+        else {
+            low->speed = new_speed;    
+        }
+        
+        fix_sim_reg_world_invariant(world_arena, world, sim_reg);
+    }
+
+}
+
+#endif
+
+struct Ray_intersection_result {
+    B32 alredy_colliding;
+    B32 will_colide;
+    F32 travel_time_normalized;
+};
+F32 get_ray_intersection_time(
+    F32 start_main_coord, F32 start_other_coord,
+    F32 displacement_main_coord, F32 displacement_other_coord, 
+    F32 wall_main_coord,
+    F32 wall_other_min_coord, F32 wall_other_max_coord
+) {
+    F32 result_time = 1.0;
+
+    if (displacement_main_coord != 0.0f) 
+    {   
+        F32 time_to_hit_an_inf_wall_at_main_coord = (wall_main_coord - start_main_coord) / displacement_main_coord;
+        // if (time_to_hit_an_inf_wall_at_main_coord == -0.0f) {
+        //     time_to_hit_an_inf_wall_at_main_coord = 0.0f;
+        // }
+        if (time_to_hit_an_inf_wall_at_main_coord >= 0.0f)
+        {
+            F32 possible_displacement_other_coord = (time_to_hit_an_inf_wall_at_main_coord * displacement_other_coord); 
+            F32 wall_other_coord = start_other_coord + possible_displacement_other_coord;
+            
+            if (   wall_other_coord >= wall_other_min_coord
+                && wall_other_coord <= wall_other_max_coord
+            ) {
+                result_time = time_to_hit_an_inf_wall_at_main_coord;
+                
+                F32 time_eps = 0.01;
+                result_time -= time_eps;
+            }
+        }
+    }
+    
+    return result_time;
+}
+
+void move_entity(Game_state* game_state,
+                 U32 low_entity_index, 
+                 F32 time_elapsed, Vec2_F32 acceleration_unit_vec, F32 acceleration_mult
+) {
+    Arena* world_arena = &game_state->arena;
+    World* world = &game_state->world;
+    Sim_reg* sim_reg = &game_state->sim_reg;
+
+    Low_entity* low = get_low_entity(world, low_entity_index);
+    Assert(low->is_also_high);
+    High_entity* high = &world->high_entities[low->high_idx];
+
+    F32 t = time_elapsed;
+
+    Vec2_F32 a = acceleration_unit_vec * acceleration_mult;
+    Vec2_F32 new_speed = low->speed + (a * t);
+    Vec2_F32 displacement = (a/2 * t*t) + (low->speed * t);
+    new_speed /= 1.5f; // NOTE: this is something like friction but a very vanila hardcoded version
+
+    if (displacement != vec2_f32(0.0f, 0.0f)) 
+    {
+        Vec2_S32 min_high_chunk = sim_reg->world_pos.chunk - vec2_s32(sim_reg->chunks_from_mid_chunk);
+        Vec2_S32 max_high_chunk = sim_reg->world_pos.chunk + vec2_s32(sim_reg->chunks_from_mid_chunk);
+        
+        // We are trying to get these values in the following loop
+        F32 min_time = 1.0f;
+        Vec2_S32 wall_hit_direction = {};
+        B32 moved = false;
+
+        if (low->can_colide)
+        {
+            for (S32 high_chunk_y = min_high_chunk.y;
+                high_chunk_y <= max_high_chunk.y;
+                high_chunk_y += 1     
+            ) {
+                for (S32 high_chunk_x = min_high_chunk.x;
+                        high_chunk_x <= max_high_chunk.x;
+                        high_chunk_x += 1     
+                ) {
+                    Chunk* chunk = get_chunk_in_world__opt(world, vec2_s32(high_chunk_x, high_chunk_y));
+                    Assert(chunk) // NOTE: it has to be created , sine we should be able to be moving outside the sim reg for now, and when we have sim reg, all the things insifde of it are supposed to alredy exist
+                    Entity_block* test_first_block = &chunk->entity_block;
+
+                    for (Entity_block* block_it = test_first_block;
+                            block_it != 0;
+                            block_it = block_it->next_block     
+                    ) {
+                        for (U32 low_idx = 0;
+                                low_idx < block_it->low_indexes_count;
+                                low_idx += 1     
+                        ) { 
+                            Low_entity* test_low = get_low_entity_from_entity_block(world, block_it, low_idx);
+                            Assert(test_low->is_also_high);
+                            High_entity* test_high = &world->high_entities[test_low->high_idx];
+        
+                            if (test_high->low_index == high->low_index) {
+                                continue;
+                            }
+
+                            if (test_low->type == Entity_type::Tree) {
+                                DebugStopHere;
+                            }
+
+                            if (test_low->can_colide) 
+                            {
+                                F32 GJK_width  = test_low->width + low->width;
+                                F32 GJK_height = test_low->height + low->height;
+
+                                Vec2_F32 enitity_min = -0.5f * vec2_f32(GJK_width, GJK_height); 
+                                Vec2_F32 enitity_max = 0.5f * vec2_f32(GJK_width, GJK_height);  
+                                
+                                Vec2_F32 test_entity_to_moved_entity = high->sim_reg_rel - test_high->sim_reg_rel;
+                        
+                                F32 eps = 0.1;
+                    
+                                F32 right_wall_coll_time = get_ray_intersection_time(
+                                        test_entity_to_moved_entity.x, test_entity_to_moved_entity.y,
+                                        displacement.x, displacement.y, 
+                                        enitity_max.x,
+                                        enitity_min.y, enitity_max.y
+                                    );
+                    
+                                F32 left_wall_coll_time = get_ray_intersection_time(
+                                        test_entity_to_moved_entity.x, test_entity_to_moved_entity.y,
+                                        displacement.x, displacement.y, 
+                                        enitity_min.x,
+                                        enitity_min.y, enitity_max.y
+                                    );
+                    
+                                F32 top_wall_coll_time = get_ray_intersection_time(
+                                        test_entity_to_moved_entity.y, test_entity_to_moved_entity.x,
+                                        displacement.y, displacement.x, 
+                                        enitity_max.y,
+                                        enitity_min.x, enitity_max.x
+                                    );
+                    
+                                F32 bottom_wall_coll_time = get_ray_intersection_time(
+                                        test_entity_to_moved_entity.y, test_entity_to_moved_entity.x,
+                                        displacement.y, displacement.x, 
+                                        enitity_min.y,
+                                        enitity_min.x, enitity_max.x
+                                    );
+                    
+                                min_time = Min(min_time, right_wall_coll_time);
+                                min_time = Min(min_time, left_wall_coll_time);
+                                min_time = Min(min_time, top_wall_coll_time);
+                                min_time = Min(min_time, bottom_wall_coll_time);
+
+                                moved = true;
+                            }
+
+                        }
+                    }
+
+                }
+            }
+
+        }
+
+        if (moved) {
+            DebugStopHere;
+        }
+
         Vec2_F32 corrected_displacement = displacement * min_time;
         high->sim_reg_rel += corrected_displacement;
         if (min_time != 1.0f) {

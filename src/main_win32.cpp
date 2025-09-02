@@ -264,6 +264,11 @@ void construct_keyboard_input_for_the_current_frame(MSG* message, Keyboard_input
             input->r_pressed = is_down;
         }
     }
+    if (message->wParam == VK_LEFT) {
+        if (was_down != is_down) {
+            input->left_arrow_pressed = is_down;
+        }
+    }
 
     input->is_used = (input->w_pressed     || 
                       input->a_pressed     || 
@@ -271,7 +276,8 @@ void construct_keyboard_input_for_the_current_frame(MSG* message, Keyboard_input
                       input->d_pressed     || 
                       input->shift_pressed ||
                       input->q_pressed     || 
-                      input->r_pressed
+                      input->r_pressed     ||
+                      input->left_arrow_pressed
                     );
 }
 // ================================================================

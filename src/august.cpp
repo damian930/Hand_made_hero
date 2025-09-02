@@ -424,6 +424,9 @@ void game_update(Bitmap* bitmap,
             }
         }
 
+        // NOTE: this is here for now
+        game_state->does_sword_exist = false;
+
         ///////////////////////////////////////////////////////////
         // Damian: getting some bitmaps loaded 
         game_state->player_skin_front.head = load_bmp_file(&game_state->arena, platform_things->read_file_fp, "..\\art\\hand_made_01\\test_hero_front_head.bmp");
@@ -445,6 +448,7 @@ void game_update(Bitmap* bitmap,
         game_state->player_shadow = load_bmp_file(&game_state->arena, platform_things->read_file_fp, "..\\art\\hand_made_01\\test_hero_shadow.bmp");
         game_state->tree_00 = load_bmp_file(&game_state->arena, platform_things->read_file_fp, "..\\art\\hand_made_01\\tree00.bmp");
         game_state->backdrop = load_bmp_file(&game_state->arena, platform_things->read_file_fp, "..\\art\\hand_made_01\\test_background.bmp");
+        game_state->rock03 = load_bmp_file(&game_state->arena, platform_things->read_file_fp, "..\\art\\hand_made_01\\rock03.bmp");
     }
 
     ///////////////////////////////////////////////////////////
@@ -516,6 +520,15 @@ void game_update(Bitmap* bitmap,
                 player_high->sim_reg_rel = vec2_f32(0.0f, 0.0f);
             }
         #endif
+
+        #if 1
+            if (keyboard->left_arrow_pressed) {
+                World_pos player_world_pos = world_pos_from_rel_pos(world, &sim_reg->world_pos, player_high->sim_reg_rel);
+                World_pos sword_world_pos = player_world_pos;
+                sword_world_pos.chunk_rel += vec2_f32(3.0f, 0.0f);
+                spawn_sword(game_state, sword_world_pos);
+            }
+        #endif
         
         }        
 
@@ -554,6 +567,11 @@ void game_update(Bitmap* bitmap,
                 update_familiar(game_state, high->low_index, time_elapsed);
             } break;
 
+            case Entity_type::Sword: 
+            {
+
+            } break;
+
             default:
             {
                 InvalidCodePath;
@@ -567,11 +585,12 @@ void game_update(Bitmap* bitmap,
     {
         ///////////////////////////////////////////////////////////
         // Damian: some constans used for drawing
-        Vec2_F32 screen_offset     = vec2_f32(200.0f, 100.0f);
-        World_pos player_world_pos = world_pos_from_rel_pos(world, &sim_reg->world_pos, player_high->sim_reg_rel);
+        Vec2_F32 screen_offset        =  vec2_f32(200.0f, 100.0f);
+        World_pos player_world_pos    =  world_pos_from_rel_pos(world, &sim_reg->world_pos, player_high->sim_reg_rel);
         Assert(player_world_pos.chunk == sim_reg->world_pos.chunk);
-        Vec2_F32 tree_00_offset    = vec2_f32(40.0f, 83.0f);
-        Vec2_F32 hero_sprite_offset = vec2_f32(72.0f, 182.0f);
+        Vec2_F32 tree_00_offset       =  vec2_f32(40.0f, 83.0f);
+        Vec2_F32 hero_sprite_offset   =  vec2_f32(72.0f, 182.0f);
+        Vec2_F32 rock03_offset        =  vec2_f32(28.0f, 11.0f);
         
         draw_black_screen(game_state, bitmap);
 
@@ -705,6 +724,20 @@ void game_update(Bitmap* bitmap,
 
                         default: {
                             InvalidCodePath;
+                        } break;
+
+                        case Entity_type::Sword:
+                        {
+                            draw_bitmap(game_state->rock03, bitmap, 
+                                entity_center_x, entity_center_y,
+                                rock03_offset.x, rock03_offset.y
+                            );
+
+                            draw_rect(bitmap, 
+                                entity_min_x, entity_min_y,
+                                entity_max_x, entity_max_y,
+                                100, 0, 0 
+                            );
                         } break;
 
                     }

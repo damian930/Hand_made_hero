@@ -71,6 +71,7 @@ struct Keyboard_input {
     B32 shift_pressed;    
     B32 q_pressed;
     B32 r_pressed;
+    B32 left_arrow_pressed;
 };
 
 // TODO: do some with this
