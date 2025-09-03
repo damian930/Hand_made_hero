@@ -2,6 +2,7 @@
 #define INTRINSICS_H
 
 #include "base.h"
+#include <math.h>
 
 ///////////////////////////////////////////////////////////
 // Damian: getting some compiler defined here
@@ -17,7 +18,8 @@
 ///////////////////////////////////////////////////////////
 // Damian: Example: 0b100100 -> returns true, idx -> 2 
 //
-B32 find_idx_of_first_least_significant_set_bit(U32 value, U32* idx) {
+B32 find_idx_of_first_least_significant_set_bit(U32 value, U32* idx) 
+{
     #if COMPILER_MSVC
     
     B32 found = _BitScanForward((unsigned long*)idx, value);
@@ -39,7 +41,6 @@ B32 find_idx_of_first_least_significant_set_bit(U32 value, U32* idx) {
 
     #endif
 }
-
 
 
 

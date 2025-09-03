@@ -11,8 +11,6 @@
 -- ...
 
 === Stuff that workd but i need to fix it 
--- Collission is sometimes buggy
--- Draw entities better (Partial drawing)
 -- Remove "this_is_a_part_of_not_having_branes" inside fix_camera_world_invariant and update it better
 -- Compile into a dll for more convinient reload
 
@@ -22,10 +20,6 @@
    it then can be aplyid to different entities i guess.
    Both of them can have a similar scheme for local F32 type storage and them World_pos for global pos of reference
    
--- Maybe reserve entity index 0 or something for the single player and then have the camera
-      follow a specific entity, this way camera following can be chaged easily. 
-      I dont like this since when we have to deal with special indexes, but maybe having a flag 
-      for it is not that bad. Dont know. But player as an entity is must have i guess.
 
 
 

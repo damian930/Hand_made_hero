@@ -641,8 +641,7 @@ void move_entity(Game_state* game_state,
         
         // We are trying to get these values in the following loop
         F32 min_time = 1.0f;
-        Vec2_S32 wall_hit_direction = {};
-        B32 moved = false;
+        Vec2_S32 wall_hit_direction_unit = {};
 
         if (low->can_colide)
         {
@@ -696,7 +695,7 @@ void move_entity(Game_state* game_state,
                                         enitity_max.x,
                                         enitity_min.y, enitity_max.y
                                     );
-                    
+
                                 F32 left_wall_coll_time = get_ray_intersection_time(
                                         test_entity_to_moved_entity.x, test_entity_to_moved_entity.y,
                                         displacement.x, displacement.y, 
@@ -717,13 +716,35 @@ void move_entity(Game_state* game_state,
                                         enitity_min.y,
                                         enitity_min.x, enitity_max.x
                                     );
-                    
-                                min_time = Min(min_time, right_wall_coll_time);
-                                min_time = Min(min_time, left_wall_coll_time);
-                                min_time = Min(min_time, top_wall_coll_time);
-                                min_time = Min(min_time, bottom_wall_coll_time);
+                                
+                                {
+                                    F32 min_time_old = min_time;
+                                    min_time = Min(min_time, right_wall_coll_time);
+                                    min_time = Min(min_time, left_wall_coll_time);
+                                    if (min_time < min_time_old) {
+                                        if (displacement.y > 0.0f) {
+                                            wall_hit_direction_unit = vec2_s32(0, 1);
+                                        }
+                                        else if (displacement.y < 0.0f) {
+                                            wall_hit_direction_unit = vec2_s32(0, -1);
+                                        }
+                                    }
+                                }
 
-                                moved = true;
+                                {
+                                    F32 min_time_old = min_time;
+                                    min_time = Min(min_time, top_wall_coll_time);
+                                    min_time = Min(min_time, bottom_wall_coll_time);
+                                    if (min_time < min_time_old) {
+                                        if (displacement.x > 0.0f) {
+                                            wall_hit_direction_unit = vec2_s32(1, 0);
+                                        }
+                                        else if (displacement.x < 0.0f) {
+                                            wall_hit_direction_unit = vec2_s32(-1, 0);
+                                        }
+                                    }
+                                }
+
                             }
 
                         }
@@ -734,16 +755,33 @@ void move_entity(Game_state* game_state,
 
         }
 
-        if (moved) {
-            DebugStopHere;
-        }
-
+        ///////////////////////////////////////////////////////////
+        // Damian: moving the player, adjusting the speed vector when colision
+        //
         Vec2_F32 corrected_displacement = displacement * min_time;
         high->sim_reg_rel += corrected_displacement;
-        if (min_time != 1.0f) {
-            low->speed = vec2_f32(0.0f, 0.0f);
+        if (min_time != 1.0f) 
+        {
+
+            low->speed = vec2_f32(0.0f);
+
+            #if 0
+            Vec2_F32 displacement_after_collision = displacement - corrected_displacement; 
+            Vec2_F32 wall_unit_vec_as_f32 = {};
+            wall_unit_vec_as_f32.x = (F32)wall_hit_direction_unit.x;
+            wall_unit_vec_as_f32.y = (F32)wall_hit_direction_unit.y;
+            
+            Vec2_F32 projected_onto_the_wall = vec2_f32_dot(displacement_after_collision, wall_unit_vec_as_f32) * wall_unit_vec_as_f32; 
+            // Vec2_F32 projected_as_unit_vec = vec2_f32_unit(projected_onto_the_wall);
+            Vec2_F32 projected_with_same_length = wall_unit_vec_as_f32 * vec2_f32_len(displacement_after_collision);  
+
+            // low->speed = projected_with_same_length * low->speed * 20;
+
+            Vec2_F32 temp = vec2_f32_dot(low->speed, wall_unit_vec_as_f32) * wall_unit_vec_as_f32;
+            low->speed = (wall_unit_vec_as_f32 * low->speed) - temp;
+            // Entity.High->dP = Entity.High->dP - 1*Inner(Entity.High->dP, WallNormal)*WallNormal;
+            #endif
         }
-        
         else {
             low->speed = new_speed;    
         }

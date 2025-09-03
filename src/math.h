@@ -243,8 +243,14 @@ B32 operator!=(Vec2_S32 v1, Vec2_S32 v2) {
     return result;
 }
 
-F32 Vec2_f32_dot(Vec2_F32 v1, Vec2_F32 v2) {
+F32 vec2_f32_dot(Vec2_F32 v1, Vec2_F32 v2) {
     F32 result = (v1.x * v2.x) + (v1.y + v2.y);
+    return result;
+}
+
+Vec2_F32 vec2_f32_unit(Vec2_F32 v)
+{
+    Vec2_F32 result = (v / vec2_f32_len(v));
     return result;
 }
 

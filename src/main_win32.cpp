@@ -338,7 +338,7 @@ int WINAPI WinMain(HINSTANCE h_instance,
                 perf_counter_per_sec = large_int.QuadPart;
             }
 
-            U32 fps = 30;
+            U32 fps = 60;
             F32 max_sec_per_frame = 1.0f/fps;
 
             while(running) 

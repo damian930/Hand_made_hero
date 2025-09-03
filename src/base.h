@@ -96,14 +96,7 @@ struct String8 {
 };
 
 file_private
-U64 c_string_len(C8* c_string)
-{
-    U64 len = 0;
-
-}
-
-file_private
-String8 string8_from_clit(Arena* arena, C8* c_string, U64 c_string_len)
+String8 __string8_from_clit(Arena* arena, C8* c_string, U64 c_string_len)
 {
     U8* str8 = ArenaPushArr(arena, U8, c_string_len - 1);
     
@@ -118,7 +111,7 @@ String8 string8_from_clit(Arena* arena, C8* c_string, U64 c_string_len)
     return result;
 }
 
-#define String8FromClit(arena_p, c_lit) string8_from_clit(arena_p, (C8*)c_lit, ArrayCount(c_lit)) 
+#define String8FromClit(arena_p, c_lit) __string8_from_clit(arena_p, (C8*)c_lit, ArrayCount(c_lit)) 
 
 U8* cstr_from_string8(Arena* arena, String8* str8)
 {
@@ -132,23 +125,25 @@ U8* cstr_from_string8(Arena* arena, String8* str8)
     return c_str;
 }
 
-// == Arrays
-// NOTE: this is here for now
+///////////////////////////////////////////////////////////
+// Damian: Arrays
+//
 #define ArrayCount(arr) (sizeof(arr) / sizeof(arr[0]))
 
-// TODO: think about this, maybe use arena insted of stack for these arrays, like ryan, so no need for arr[size] needed. Some like that....
-#define DefineArrayType(type, name) struct name { \
-                                        type* base; \
-                                        U64 count; \
-                                    };
-
-// ============================================
-
-// == Some fancy Ryan Fleury type macros for data structures
+///////////////////////////////////////////////////////////
+// Damian: Some RJF list pushing
+//
 #define StackPush(top_node_p, new_node_p) new_node_p->prev = top_node_p; \
                                           top_node_p = new_node_p;
-// ========================================================
 
+///////////////////////////////////////////////////////////
+// Damian: just testing some macro stuff, to is if it would be more comfortable to use
+//
+#define ForInLoop(type, it_var_name, range_start, range_end, update) \
+    for (type it_var_name = range_start; it_var_name <= range_end; it_var_name update)
+// ForInLoop(U32, i, 0, 10, += 1) {
+
+// }
 
 
 
