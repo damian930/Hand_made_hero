@@ -184,34 +184,38 @@ B32 is_sim_reg_rel_pos_within_sim_reg_bounds(World* world, Sim_reg* sim_reg, Vec
     return is_within;
 }
 
+#if 1
+// NOTE: this is not a general func for the world_pos, since we need to assert here just in case
 Vec2_F32 sim_reg_rel_from_world_pos(World* world, Sim_reg* sim_reg, World_pos* world_pos)
 {
     Vec2_F32 rell = subtract_world_pos(world, world_pos, &sim_reg->world_pos);
     Assert(is_sim_reg_rel_pos_within_sim_reg_bounds(world, sim_reg, rell));
     return rell;
 }
+#endif
 
 ///////////////////////////////////////////////////////////
 // Damian: Entity stuff 
 //
-Low_entity* get_low_entity(World* world, U32 low_index) 
+Stored_entity* get_stored_entity(World* world, U32 stored_index) 
 {
-    Assert(low_index < world->low_entity_count);
-    Low_entity* low = &world->low_entities[low_index];
-    return low;
+    Assert(stored_index < world->stored_entity_count);
+    Stored_entity* stored = &world->stored_entities[stored_index];
+    return stored;
 }
 
 // NOTE: this saves like 2 lines of code, but i spent 1.5 hours trying to fix a bug relate to this.
 //       i was using a local index to a global index to acces a global low_entity
 //       it would have been fine if this same error didnt happend the exact same way in 3 different places
 //       (28th of August 2025 12:44 (24 hour system))
-Low_entity* get_low_entity_from_entity_block(World* world, Entity_block* block, U32 block_index)
+Stored_entity* get_low_entity_from_entity_block(World* world, Entity_block* block, U32 block_index)
 {
-    U32 low_entity_index = block->low_indexes[block_index];
-    Low_entity* low = get_low_entity(world, low_entity_index);
-    return low;
+    U32 stored_entity_index = block->stored_indexes[block_index];
+    Stored_entity* stored = get_stored_entity(world, stored_entity_index);
+    return stored;
 }
 
+#if 0
 B32 convert_low_entity_to_high(World* world, Sim_reg* sim_reg, U32 low_index) 
 {
     Assert(world->high_entity_count < ArrayCount(world->high_entities));
@@ -236,7 +240,9 @@ B32 convert_low_entity_to_high(World* world, Sim_reg* sim_reg, U32 low_index)
 
     return did_convert;
 }
+#endif
 
+#if 0
 B32 convert_high_entity_to_low(World* world, Sim_reg* sim_reg, U32 low_index)
 {
     Low_entity* low = get_low_entity(world, low_index);
@@ -264,6 +270,7 @@ B32 convert_high_entity_to_low(World* world, Sim_reg* sim_reg, U32 low_index)
 
     return true;
 }
+#endif
 
 #if 0
 file_private
@@ -318,16 +325,14 @@ void load_chunk(Arena* world_arena, World* world, Camera_* camera, Vec2_S32 chun
 }
 #endif
 
-void spawn_entity(Game_state* game_state, Low_entity new_low_entity) 
+void spawn_entity(Arena* world_arena, World* world, Stored_entity new_stored) 
 {
-    Arena* world_arena = &game_state->arena;
-    World* world       = &game_state->world;
-    Sim_reg* sim_reg   = &game_state->sim_reg;
-
-    Assert(world->low_entity_count < ArrayCount(world->low_entities));
-    Chunk* chunk = get_chunk_in_world__spawns(world_arena, world, new_low_entity.world_pos.chunk);
+    Assert(world->stored_entity_count < ArrayCount(world->stored_entities));
+    Chunk* chunk = get_chunk_in_world__spawns(world_arena, world, new_stored.world_pos.chunk);
     
-    // Gettting a first usable block
+    ///////////////////////////////////////////////////////////
+    // Damian: Gettting a first usable block 
+    //
     Entity_block* last_block;
     Entity_block* usable_block; 
     for (usable_block = &chunk->entity_block; 
@@ -336,13 +341,15 @@ void spawn_entity(Game_state* game_state, Low_entity new_low_entity)
     ) {
         last_block = usable_block;
      
-        if (usable_block->low_indexes_count < ArrayCount(usable_block->low_indexes)) {
+        if (usable_block->stored_indexes_count < ArrayCount(usable_block->stored_indexes)) {
             break;
         }
 
     }
 
-    // Need to create a new block, since all the other once are filled
+    ///////////////////////////////////////////////////////////
+    // Damian: Need to create a new block, since all the other once are filled 
+    //
     if (!usable_block)
     {
         Entity_block* new_block = ArenaPush(world_arena, Entity_block);
@@ -351,23 +358,18 @@ void spawn_entity(Game_state* game_state, Low_entity new_low_entity)
         usable_block = new_block;
     }
 
-    // Inserting the new entity 
-    U32 new_low_index = world->low_entity_count++; 
-    Low_entity* new_low = &world->low_entities[new_low_index];    
-    
-    *new_low = new_low_entity;
-    Assert(!new_low_entity.is_also_high);
-    new_low->is_also_high = false;
+    ///////////////////////////////////////////////////////////
+    // Damian: Inserting the new entity 
+    //
+    U32 new_stored_index = world->stored_entity_count++; 
+    world->stored_entities[new_stored_index] = new_stored;  
 
-    usable_block->low_indexes[usable_block->low_indexes_count++] = new_low_index;
-    B32 converted = convert_low_entity_to_high(world, sim_reg, new_low_index);
-    Assert(converted);
+    usable_block->stored_indexes[usable_block->stored_indexes_count++] = new_stored_index;
 }
 
-// TODO: maybe just pass in game state, since it takes all the parts of it in
-void spawn_player(Game_state* game_state, World_pos player_mid_pos)
+void spawn_player(Arena* world_arena, World* world, World_pos player_mid_pos)
 { 
-    Low_entity new_entity = {};
+    Stored_entity new_entity = {};
     new_entity.width      = 1.95f;
     new_entity.height     = 0.55f;
     new_entity.speed      = vec2_f32(0.0f, 0.0f);
@@ -377,12 +379,12 @@ void spawn_player(Game_state* game_state, World_pos player_mid_pos)
     new_entity.hp         = 3;
     new_entity.can_colide = true;
 
-    spawn_entity(game_state, new_entity);
+    spawn_entity(world_arena, world, new_entity);
 }
 
-void spawn_tree(Game_state* game_state, World_pos tree_mid_pos) 
+void spawn_tree(Arena* world_arena, World* world, World_pos tree_mid_pos) 
 { 
-    Low_entity new_entity = {};
+    Stored_entity new_entity = {};
     new_entity.width      = 1.0f;
     new_entity.height     = 1.0f;
     new_entity.speed      = vec2_f32(0.0f, 0.0f);
@@ -390,13 +392,14 @@ void spawn_tree(Game_state* game_state, World_pos tree_mid_pos)
     new_entity.type       = Entity_type::Tree;
     new_entity.can_colide = true;
 
-    spawn_entity(game_state, new_entity);
+    spawn_entity(world_arena, world, new_entity);
 }
 
-void spawn_familiar(Game_state* game_state,  
+#if 0
+void spawn_familiar(Arena* world_arena, World* world,  
                     World_pos familiar_world_pos, U32 high_entity_to_track_index 
 ) { 
-    Low_entity new_entity = {};
+    Stored_entity new_entity = {};
     new_entity.width  = 1.0f;
     new_entity.height = 1.0f;
     new_entity.speed  = vec2_f32(0.0f, 0.0f);
@@ -406,17 +409,13 @@ void spawn_familiar(Game_state* game_state,
     new_entity.has_entity_to_track = true;
     new_entity.high_entity_to_track_index = high_entity_to_track_index;
 
-    spawn_entity(game_state, new_entity);
+    spawn_entity(world_arena, world, new_entity);
 }
+#endif
 
-void spawn_sword(Game_state* game_state, World_pos sword_world_pos) 
+void spawn_sword(Arena* world_arena, World* world, World_pos sword_world_pos) 
 { 
-    if (game_state->does_sword_exist) {
-        return;
-    }
-    game_state->does_sword_exist = true;
-
-    Low_entity new_entity = {};
+    Stored_entity new_entity = {};
     new_entity.width      = 1.0f;
     new_entity.height     = 1.0f;
     new_entity.speed      = vec2_f32(0.0f, 0.0f);
@@ -424,9 +423,10 @@ void spawn_sword(Game_state* game_state, World_pos sword_world_pos)
     new_entity.type       = Entity_type::Sword;
     new_entity.can_colide = true;
 
-    spawn_entity(game_state, new_entity);
+    spawn_entity(world_arena, world, new_entity);
 }
 
+#if 0
 B32 validate_low_high_entity_pairs(World* world)
 {
     B32 is_valid = true;
@@ -443,12 +443,14 @@ B32 validate_low_high_entity_pairs(World* world)
     }
     return is_valid;
 }
+#endif
 
+#if 0
 // NOTE: This is the main function that takes care of World simulation region
 //       and camera relative both for the player and the entities
 B32 fix_sim_reg_world_invariant(Arena* world_arena,
-                               World* world, 
-                               Sim_reg* sim_reg 
+                                World* world, 
+                                Sim_reg* sim_reg 
 ) {
     Assert(validate_low_high_entity_pairs(world));
     
@@ -578,6 +580,7 @@ B32 fix_sim_reg_world_invariant(Arena* world_arena,
 
     return true;
 }
+#endif
 
 ///////////////////////////////////////////////////////////
 // Damian: move the player stuff struct 
@@ -615,23 +618,19 @@ F32 get_ray_intersection_time(
     return result_time;
 }
 
-void move_entity(Game_state* game_state,
-                 U32 low_entity_index, 
+// TODO: move these parametes into a more coherent struct
+//       then store some data inside the entities when spawning that relates the update policy for their type
+void move_entity(World* world, Sim_reg* sim_reg, 
+                 U32 sim_entity_index,         
                  F32 time_elapsed, Vec2_F32 acceleration_unit_vec, F32 acceleration_mult
 ) {
-    Arena* world_arena = &game_state->arena;
-    World* world = &game_state->world;
-    Sim_reg* sim_reg = &game_state->sim_reg;
+    Sim_entity* sim_entity = &sim_reg->sim_entities[sim_entity_index];
 
-    Low_entity* low = get_low_entity(world, low_entity_index);
-    Assert(low->is_also_high);
-    High_entity* high = &world->high_entities[low->high_idx];
-
+    // Arena* world_arena = &game_state->arena;
     F32 t = time_elapsed;
-
     Vec2_F32 a = acceleration_unit_vec * acceleration_mult;
-    Vec2_F32 new_speed = low->speed + (a * t);
-    Vec2_F32 displacement = (a/2 * t*t) + (low->speed * t);
+    Vec2_F32 new_speed = sim_entity->stored_variant.speed + (a * t);
+    Vec2_F32 displacement = (a/2 * t*t) + (sim_entity->stored_variant.speed * t);
     new_speed /= 1.5f; // NOTE: this is something like friction but a very vanila hardcoded version
 
     if (displacement != vec2_f32(0.0f, 0.0f)) 
@@ -643,150 +642,127 @@ void move_entity(Game_state* game_state,
         F32 min_time = 1.0f;
         Vec2_S32 wall_hit_direction_unit = {};
 
-        if (low->can_colide)
+        if (sim_entity->stored_variant.can_colide)
         {
-            for (S32 high_chunk_y = min_high_chunk.y;
-                high_chunk_y <= max_high_chunk.y;
-                high_chunk_y += 1     
+            // TODO: dont forget that there might be entites outside of the sim region, 
+            //       acount those for collision
+
+            for (U32 sim_reg_index = 0; 
+                sim_reg_index < sim_reg->sim_entitie_count;
+                sim_reg_index += 1
             ) {
-                for (S32 high_chunk_x = min_high_chunk.x;
-                        high_chunk_x <= max_high_chunk.x;
-                        high_chunk_x += 1     
-                ) {
-                    Chunk* chunk = get_chunk_in_world__opt(world, vec2_s32(high_chunk_x, high_chunk_y));
-                    Assert(chunk) // NOTE: it has to be created , sine we should be able to be moving outside the sim reg for now, and when we have sim reg, all the things insifde of it are supposed to alredy exist
-                    Entity_block* test_first_block = &chunk->entity_block;
+                if (sim_entity_index == sim_reg_index) {
+                    continue;
+                }
 
-                    for (Entity_block* block_it = test_first_block;
-                            block_it != 0;
-                            block_it = block_it->next_block     
-                    ) {
-                        for (U32 low_idx = 0;
-                                low_idx < block_it->low_indexes_count;
-                                low_idx += 1     
-                        ) { 
-                            Low_entity* test_low = get_low_entity_from_entity_block(world, block_it, low_idx);
-                            Assert(test_low->is_also_high);
-                            High_entity* test_high = &world->high_entities[test_low->high_idx];
+                Sim_entity* other_sim_entity = &sim_reg->sim_entities[sim_reg_index];
+                if (other_sim_entity->stored_variant.can_colide) 
+                {
+                    F32 GJK_width  = sim_entity->stored_variant.width + other_sim_entity->stored_variant.width;
+                    F32 GJK_height = sim_entity->stored_variant.height + other_sim_entity->stored_variant.height;
+
+                    Vec2_F32 enitity_min = -0.5f * vec2_f32(GJK_width, GJK_height); 
+                    Vec2_F32 enitity_max = 0.5f * vec2_f32(GJK_width, GJK_height);  
+                    
+                    Vec2_F32 test_entity_to_moved_entity = 
+                        sim_entity->sim_reg_rel - other_sim_entity->sim_reg_rel; 
+            
+                    F32 eps = 0.1;
         
-                            if (test_high->low_index == high->low_index) {
-                                continue;
-                            }
+                    F32 right_wall_coll_time = get_ray_intersection_time(
+                            test_entity_to_moved_entity.x, test_entity_to_moved_entity.y,
+                            displacement.x, displacement.y, 
+                            enitity_max.x,
+                            enitity_min.y, enitity_max.y
+                        );
 
-                            if (test_low->type == Entity_type::Tree) {
-                                DebugStopHere;
-                            }
-
-                            if (test_low->can_colide) 
-                            {
-                                F32 GJK_width  = test_low->width + low->width;
-                                F32 GJK_height = test_low->height + low->height;
-
-                                Vec2_F32 enitity_min = -0.5f * vec2_f32(GJK_width, GJK_height); 
-                                Vec2_F32 enitity_max = 0.5f * vec2_f32(GJK_width, GJK_height);  
-                                
-                                Vec2_F32 test_entity_to_moved_entity = high->sim_reg_rel - test_high->sim_reg_rel;
-                        
-                                F32 eps = 0.1;
+                    F32 left_wall_coll_time = get_ray_intersection_time(
+                            test_entity_to_moved_entity.x, test_entity_to_moved_entity.y,
+                            displacement.x, displacement.y, 
+                            enitity_min.x,
+                            enitity_min.y, enitity_max.y
+                        );
+        
+                    F32 top_wall_coll_time = get_ray_intersection_time(
+                            test_entity_to_moved_entity.y, test_entity_to_moved_entity.x,
+                            displacement.y, displacement.x, 
+                            enitity_max.y,
+                            enitity_min.x, enitity_max.x
+                        );
+        
+                    F32 bottom_wall_coll_time = get_ray_intersection_time(
+                            test_entity_to_moved_entity.y, test_entity_to_moved_entity.x,
+                            displacement.y, displacement.x, 
+                            enitity_min.y,
+                            enitity_min.x, enitity_max.x
+                        );
                     
-                                F32 right_wall_coll_time = get_ray_intersection_time(
-                                        test_entity_to_moved_entity.x, test_entity_to_moved_entity.y,
-                                        displacement.x, displacement.y, 
-                                        enitity_max.x,
-                                        enitity_min.y, enitity_max.y
-                                    );
-
-                                F32 left_wall_coll_time = get_ray_intersection_time(
-                                        test_entity_to_moved_entity.x, test_entity_to_moved_entity.y,
-                                        displacement.x, displacement.y, 
-                                        enitity_min.x,
-                                        enitity_min.y, enitity_max.y
-                                    );
-                    
-                                F32 top_wall_coll_time = get_ray_intersection_time(
-                                        test_entity_to_moved_entity.y, test_entity_to_moved_entity.x,
-                                        displacement.y, displacement.x, 
-                                        enitity_max.y,
-                                        enitity_min.x, enitity_max.x
-                                    );
-                    
-                                F32 bottom_wall_coll_time = get_ray_intersection_time(
-                                        test_entity_to_moved_entity.y, test_entity_to_moved_entity.x,
-                                        displacement.y, displacement.x, 
-                                        enitity_min.y,
-                                        enitity_min.x, enitity_max.x
-                                    );
-                                
-                                {
-                                    F32 min_time_old = min_time;
-                                    min_time = Min(min_time, right_wall_coll_time);
-                                    min_time = Min(min_time, left_wall_coll_time);
-                                    if (min_time < min_time_old) {
-                                        if (displacement.y > 0.0f) {
-                                            wall_hit_direction_unit = vec2_s32(0, 1);
-                                        }
-                                        else if (displacement.y < 0.0f) {
-                                            wall_hit_direction_unit = vec2_s32(0, -1);
-                                        }
-                                    }
-                                }
-
-                                {
-                                    F32 min_time_old = min_time;
-                                    min_time = Min(min_time, top_wall_coll_time);
-                                    min_time = Min(min_time, bottom_wall_coll_time);
-                                    if (min_time < min_time_old) {
-                                        if (displacement.x > 0.0f) {
-                                            wall_hit_direction_unit = vec2_s32(1, 0);
-                                        }
-                                        else if (displacement.x < 0.0f) {
-                                            wall_hit_direction_unit = vec2_s32(-1, 0);
-                                        }
-                                    }
-                                }
-
+                    {
+                        F32 min_time_old = min_time;
+                        min_time = Min(min_time, right_wall_coll_time);
+                        min_time = Min(min_time, left_wall_coll_time);
+                        if (min_time < min_time_old) {
+                            if (displacement.y > 0.0f) {
+                                wall_hit_direction_unit = vec2_s32(0, 1);
                             }
+                            else if (displacement.y < 0.0f) {
+                                wall_hit_direction_unit = vec2_s32(0, -1);
+                            }
+                        }
+                    }
 
+                    {
+                        F32 min_time_old = min_time;
+                        min_time = Min(min_time, top_wall_coll_time);
+                        min_time = Min(min_time, bottom_wall_coll_time);
+                        if (min_time < min_time_old) {
+                            if (displacement.x > 0.0f) {
+                                wall_hit_direction_unit = vec2_s32(1, 0);
+                            }
+                            else if (displacement.x < 0.0f) {
+                                wall_hit_direction_unit = vec2_s32(-1, 0);
+                            }
                         }
                     }
 
                 }
+                
             }
 
-        }
+            ///////////////////////////////////////////////////////////
+            // Damian: moving the player, adjusting the speed vector when colision
+            //
+            Vec2_F32 corrected_displacement = displacement * min_time;
+            sim_entity->sim_reg_rel += corrected_displacement;
+            if (min_time != 1.0f) 
+            {
+                sim_entity->stored_variant.speed = vec2_f32(0.0f);
 
-        ///////////////////////////////////////////////////////////
-        // Damian: moving the player, adjusting the speed vector when colision
-        //
-        Vec2_F32 corrected_displacement = displacement * min_time;
-        high->sim_reg_rel += corrected_displacement;
-        if (min_time != 1.0f) 
-        {
+                #if 0
+                Vec2_F32 displacement_after_collision = displacement - corrected_displacement; 
+                Vec2_F32 wall_unit_vec_as_f32 = {};
+                wall_unit_vec_as_f32.x = (F32)wall_hit_direction_unit.x;
+                wall_unit_vec_as_f32.y = (F32)wall_hit_direction_unit.y;
+                
+                Vec2_F32 projected_onto_the_wall = vec2_f32_dot(displacement_after_collision, wall_unit_vec_as_f32) * wall_unit_vec_as_f32; 
+                // Vec2_F32 projected_as_unit_vec = vec2_f32_unit(projected_onto_the_wall);
+                Vec2_F32 projected_with_same_length = wall_unit_vec_as_f32 * vec2_f32_len(displacement_after_collision);  
 
-            low->speed = vec2_f32(0.0f);
+                // low->speed = projected_with_same_length * low->speed * 20;
 
-            #if 0
-            Vec2_F32 displacement_after_collision = displacement - corrected_displacement; 
-            Vec2_F32 wall_unit_vec_as_f32 = {};
-            wall_unit_vec_as_f32.x = (F32)wall_hit_direction_unit.x;
-            wall_unit_vec_as_f32.y = (F32)wall_hit_direction_unit.y;
+                Vec2_F32 temp = vec2_f32_dot(low->speed, wall_unit_vec_as_f32) * wall_unit_vec_as_f32;
+                low->speed = (wall_unit_vec_as_f32 * low->speed) - temp;
+                // Entity.High->dP = Entity.High->dP - 1*Inner(Entity.High->dP, WallNormal)*WallNormal;
+                #endif
+            }
+            else {
+                sim_entity->stored_variant.speed = new_speed;    
+            }
             
-            Vec2_F32 projected_onto_the_wall = vec2_f32_dot(displacement_after_collision, wall_unit_vec_as_f32) * wall_unit_vec_as_f32; 
-            // Vec2_F32 projected_as_unit_vec = vec2_f32_unit(projected_onto_the_wall);
-            Vec2_F32 projected_with_same_length = wall_unit_vec_as_f32 * vec2_f32_len(displacement_after_collision);  
-
-            // low->speed = projected_with_same_length * low->speed * 20;
-
-            Vec2_F32 temp = vec2_f32_dot(low->speed, wall_unit_vec_as_f32) * wall_unit_vec_as_f32;
-            low->speed = (wall_unit_vec_as_f32 * low->speed) - temp;
-            // Entity.High->dP = Entity.High->dP - 1*Inner(Entity.High->dP, WallNormal)*WallNormal;
-            #endif
+            // NOTE: this wont be hapening, since move is only for a sim set now,
+            //       end the invariant will be dont via end_sim_region func
+            // fix_sim_reg_world_invariant(world_arena, world, sim_reg);
         }
-        else {
-            low->speed = new_speed;    
-        }
-        
-        fix_sim_reg_world_invariant(world_arena, world, sim_reg);
     }
 
 }
@@ -794,8 +770,18 @@ void move_entity(Game_state* game_state,
 ///////////////////////////////////////////////////////////
 // Damian: more entity stuff, particularly update functions
 //
-// TODO: see if i would make more sence to store low and high and indexes togethew, 
-//       so less accessing is then required
+void update_player(World* world, Sim_reg* sim_reg, 
+                   U32 sim_entity_index, 
+                   Vec2_F32 acceleration_unit_vec, 
+                   B32 q_pressed, B32 r_pressed, F32 time_elapsed
+) {
+    F32 player_acceleration_mult = 225;
+    move_entity(world, sim_reg, 
+                sim_entity_index, 
+                time_elapsed, acceleration_unit_vec, player_acceleration_mult);
+}
+
+#if 0
 void update_familiar(Game_state* game_state, 
                      U32 familiar_low_index, F32 time_elapsed
 ) {
@@ -820,14 +806,97 @@ void update_familiar(Game_state* game_state,
         move_entity(game_state, familiar_low_index, time_elapsed, acc_unit_vec, acceleration_mult);
     }
     DebugStopHere;
+}
+#endif
 
+///////////////////////////////////////////////////////////
+// Damian: Stored/Simulated entity stuff for the sim region(s)
+//
+
+// IDEAS: start a simulation at a point
+//        do stuff with it 
+//        end simulation 
+
+Sim_reg* start_sim_reg(Arena* world_arena, Arena* frame_arena, 
+                       World* world, 
+                       World_pos sim_world_pos, S32 chunks_from_mid_chunk)
+{
+    Sim_reg* new_sim_reg = ArenaPush(frame_arena, Sim_reg);
+    new_sim_reg->world_pos             = sim_world_pos;
+    new_sim_reg->chunks_from_mid_chunk = chunks_from_mid_chunk;
+    new_sim_reg->sim_entitie_count     = 0;
+
+    Vec2_S32 min_sim_chunk = sim_world_pos.chunk - vec2_s32(chunks_from_mid_chunk);
+    Vec2_S32 max_sim_chunk = sim_world_pos.chunk + vec2_s32(chunks_from_mid_chunk);
+
+    for (S32 chunk_y = min_sim_chunk.y; 
+         chunk_y <= max_sim_chunk.y; 
+         chunk_y += 1)
+    {
+        for (S32 chunk_x = min_sim_chunk.x; 
+             chunk_x <= max_sim_chunk.x; 
+             chunk_x += 1)
+        {
+            // TODO: figure out what to do with spawning here
+            // TODO: Need to spawn less for the non player sim regions i guess
+            Chunk* chunk = get_chunk_in_world__spawns(world_arena, world, vec2_s32(chunk_x, chunk_y));
+            Assert(chunk);
+
+            for (Entity_block* block = &chunk->entity_block; 
+                 block != 0; 
+                 block = block->next_block)
+            {
+                for (U32 block_stored_index = 0; 
+                     block_stored_index < block->stored_indexes_count; 
+                     block_stored_index += 1) 
+                {
+                    U32 world_low_index = block->stored_indexes[block_stored_index];
+                    Stored_entity* stored = &world->stored_entities[world_low_index];
+
+                    ///////////////////////////////////////////////////////////
+                    // Damian: Converting stored to simulated
+                    //
+                    Assert(new_sim_reg->sim_entitie_count < ArrayCount(new_sim_reg->sim_entities));
+                    
+                    if (is_world_pos_within_sim_reg(world, new_sim_reg, stored->world_pos)) 
+                    {
+                        Sim_entity* new_sim_entity = &new_sim_reg->sim_entities[new_sim_reg->sim_entitie_count];
+                        new_sim_reg->sim_entitie_count += 1;                        
+                        
+                        new_sim_entity->sim_reg_rel    = sim_reg_rel_from_world_pos(world, new_sim_reg, &stored->world_pos);
+                        new_sim_entity->stored_variant = *stored;
+                        new_sim_entity->stored_index   = world_low_index;
+                        
+                    }
+
+                }
+            }
+
+        }
+    }
+
+    return new_sim_reg;
 }
 
-
-
-
-
-
+// TODO: Deal with the fact that sim_reg was allocated on the arena when in was started
+void end_sim_reg(World* world, Sim_reg* sim_reg)
+{
+    for (U32 sim_index = 0; sim_index < sim_reg->sim_entitie_count; sim_index += 1) 
+    {
+        Sim_entity* sim = &sim_reg->sim_entities[sim_index];
+        
+        Stored_entity new_stored = {};
+        new_stored = sim->stored_variant;
+        new_stored.world_pos = world_pos_from_rel_pos(world, &sim_reg->world_pos, sim->sim_reg_rel); 
+        
+        // TODO: chage this, dont like the fact that we store index to low inside the simulated entity state
+        world->stored_entities[sim->stored_index] = new_stored;
+    }
+    
+    sim_reg->sim_entitie_count = 0;
+    // TODO: Deal with frame_arena here
+    // ...
+}
 
 
 

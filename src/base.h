@@ -24,6 +24,11 @@ typedef S32 B32;
 #define global static
 
 #define namespaced_enum enum class
+// NOTE(damian, 4th September 2025): 
+//   Starting enums with value of 1 is great, 
+//   since then there is never a moment of confusion between enum value 0 
+//   and unnitialised state of 0.
+//   This is especially great if "{0} init strategy" is used in code base. 
 
 #define Bytes_U32(value)     ((U32) value) 
 #define Kilobytes_U32(value) ((U32)1024 * Bytes_U32(value))
@@ -110,7 +115,6 @@ String8 __string8_from_clit(Arena* arena, C8* c_string, U64 c_string_len)
     
     return result;
 }
-
 #define String8FromClit(arena_p, c_lit) __string8_from_clit(arena_p, (C8*)c_lit, ArrayCount(c_lit)) 
 
 U8* cstr_from_string8(Arena* arena, String8* str8)
@@ -128,7 +132,7 @@ U8* cstr_from_string8(Arena* arena, String8* str8)
 ///////////////////////////////////////////////////////////
 // Damian: Arrays
 //
-#define ArrayCount(arr) (sizeof(arr) / sizeof(arr[0]))
+#define ArrayCount(static_arr) (sizeof(static_arr) / sizeof(static_arr[0]))
 
 ///////////////////////////////////////////////////////////
 // Damian: Some RJF list pushing

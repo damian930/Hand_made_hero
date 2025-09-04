@@ -255,9 +255,9 @@ file_private void draw_rect(Bitmap* bitmap,
     }
 } 
 
-void draw_hitpoint(Bitmap* bitmap, Low_entity* low, Vec2_F32 base_screen_pos)
+void draw_hitpoint(Bitmap* bitmap, Sim_entity* sim_entity, Vec2_F32 base_screen_pos)
 {
-    if (low->has_hp && low->hp != 0) 
+    if (sim_entity->stored_variant.has_hp && sim_entity->stored_variant.hp != 0) 
     {
         Vec2_F32 hp_line_center = base_screen_pos;
         Vec2_F32 hp_dims = vec2_f32(10.0f, 10.0f);
@@ -268,13 +268,13 @@ void draw_hitpoint(Bitmap* bitmap, Low_entity* low, Vec2_F32 base_screen_pos)
         Vec2_F32 most_left_hp_min;
         {
             most_left_hp_min = hp_line_center - (hp_dims / 2);
-            for (U32 i = 1; i<low->hp; i += 1) 
+            for (U32 i = 1; i<sim_entity->stored_variant.hp; i += 1) 
             {
                 most_left_hp_min.x -= h_jump_between_hp;
             }
         }
 
-        for (U32 i = 1; i<=low->hp; i += 1)
+        for (U32 i = 1; i<=sim_entity->stored_variant.hp; i += 1)
         {
             Vec2_F32 hp_min = most_left_hp_min + draw_offset;
 
@@ -403,48 +403,47 @@ void game_update(Bitmap* bitmap,
         }
         
         ///////////////////////////////////////////////////////////
-        // Damian: creating a simulation region for the world
-        Sim_reg* sim_reg = &game_state->sim_reg;
+        // Damian: creating a player
+        World_pos player_world_pos = {};
         {
-            World_pos sim_reg_world_pos = {};
-            sim_reg_world_pos.chunk = vec2_s32(0, 0);
-            sim_reg_world_pos.chunk_rel = 0.5f * vec2_f32(world->chunk_side_in_m);
+            player_world_pos.chunk     = vec2_s32(0, 0);
+            player_world_pos.chunk_rel = 0.5f * vec2_f32(world->chunk_side_in_m);
     
-            sim_reg->world_pos = sim_reg_world_pos;
-            sim_reg->chunks_from_mid_chunk = 1;
+            spawn_player(world_arena, world, player_world_pos);
+            // TODO: dont like this             
+            world->player_stored_index = 0;
+            Assert(world->stored_entities[world->player_stored_index].type == Entity_type::Player);
+        }
 
-            ///////////////////////////////////////////////////////////
-            // Damian: creating a player
-            spawn_player(game_state, sim_reg->world_pos);
-            world->player_low_index = 0;
-            B32 is_actually_a_player = world->low_entities[world->high_entities[world->player_low_index].low_index].type == Entity_type::Player; 
-            Assert(is_actually_a_player);
-
-            ///////////////////////////////////////////////////////////
-            // Damian: creating a familiar to track the player
-            
+        ///////////////////////////////////////////////////////////
+        // Damian: creating a familiar to track the player
+        {
             World_pos familiar_world_pos = {};
             familiar_world_pos.chunk = vec2_s32(0, 0);
             familiar_world_pos.chunk_rel = 0.25f * vec2_f32(world->chunk_side_in_m);
-            spawn_familiar(game_state, familiar_world_pos, 0);
-
-            // TODO: dont like having this be hardcoded here, make a func that then can be used to do it in other places. 
-            Vec2_S32 sim_reg_min_chunk = sim_reg->world_pos.chunk - vec2_s32(sim_reg->chunks_from_mid_chunk);
-            Vec2_S32 sim_reg_max_chunk = sim_reg->world_pos.chunk + vec2_s32(sim_reg->chunks_from_mid_chunk);
-
-            for (S32 chunk_y = sim_reg_min_chunk.y;
-                chunk_y <= sim_reg_max_chunk.y;
-                chunk_y += 1     
-            ) {
-                for (S32 chunk_x = sim_reg_min_chunk.x;
-                    chunk_x <= sim_reg_max_chunk.x;
-                    chunk_x += 1     
-                ) { 
-                    Chunk* chunk = get_chunk_in_world__spawns(world_arena, world, vec2_s32(chunk_x, chunk_y));
-                }
-            }
-
+            // spawn_familiar(world_arena, world, familiar_world_pos, 0);
         }
+
+        ///////////////////////////////////////////////////////////
+        // Damian: Spawning some parts of the map that are close to the origin point
+        //
+
+        // TODO: dont like having this be hardcoded here, make a func that then can be used to do it in other places. 
+        Vec2_S32 sim_reg_min_chunk = player_world_pos.chunk - vec2_s32(2);
+        Vec2_S32 sim_reg_max_chunk = player_world_pos.chunk + vec2_s32(2);
+
+        for (S32 chunk_y = sim_reg_min_chunk.y;
+            chunk_y <= sim_reg_max_chunk.y;
+            chunk_y += 1     
+        ) {
+            for (S32 chunk_x = sim_reg_min_chunk.x;
+                chunk_x <= sim_reg_max_chunk.x;
+                chunk_x += 1     
+            ) { 
+                Chunk* chunk = get_chunk_in_world__spawns(world_arena, world, vec2_s32(chunk_x, chunk_y));
+            }
+        }
+
 
         ///////////////////////////////////////////////////////////
         // Damian: spawning a bit
@@ -466,14 +465,11 @@ void game_update(Bitmap* bitmap,
                 }
 
                 if ((is_vert_wall || is_hor_wall) && (!is_door)) {
-                    spawn_tree(game_state, wall_spawn_pos);
+                    spawn_tree(world_arena, world, wall_spawn_pos);
                 }
 
             }
         }
-
-        // NOTE: this is here for now
-        game_state->does_sword_exist = false;
 
         ///////////////////////////////////////////////////////////
         // Damian: getting some bitmaps loaded 
@@ -500,15 +496,11 @@ void game_update(Bitmap* bitmap,
     }
 
     ///////////////////////////////////////////////////////////
-    // Damian: some game_state unwrapped struxt for easier referencing
+    // Damian: some game_state unwrapped structs for easier referencing
     //
-    Arena frame_arena = arena_init(mem->frame_mem, mem->frame_mem_size);
-
-    World* world             = &game_state->world;
-    Sim_reg* sim_reg         = &game_state->sim_reg;
-    Low_entity* player_low   = get_low_entity(world, world->player_low_index);
-    Assert(player_low->is_also_high);
-    High_entity* player_high = &world->high_entities[player_low->high_idx];
+    Arena frame_arena  = arena_init(mem->frame_mem, mem->frame_mem_size);
+    Arena* world_arena = &game_state->arena; 
+    World* world       = &game_state->world;
     
     ///////////////////////////////////////////////////////////
     // Damian: things to time profile profile 
@@ -523,8 +515,11 @@ void game_update(Bitmap* bitmap,
     ///////////////////////////////////////////////////////////
     // Damian: getting data to then move the player
     //
+    Vec2_F32 acceleration_unit_vec = {};
+    B32 q_pressed                  = false;
+    B32 r_pressed                  = false;
+    Entity_direction direction     = Entity_direction::Back;
     {
-        Vec2_F32 acceleration_unit_vec = {};
         if (keyboard->is_used) 
         {   
             if (keyboard->w_pressed) { acceleration_unit_vec.y = 1.0f; }
@@ -532,7 +527,8 @@ void game_update(Bitmap* bitmap,
             if (keyboard->s_pressed) { acceleration_unit_vec.y = -1.0f; } 
             if (keyboard->d_pressed) { acceleration_unit_vec.x = 1.0f; }
             if (keyboard->q_pressed) {
-                player_low->speed = vec2_f32(0.0f, 0.0f);
+                q_pressed = true;
+                //player_low->speed = vec2_f32(0.0f, 0.0f);
             }
 
             if (acceleration_unit_vec.x != 0.0f && acceleration_unit_vec.y != 0.0f) {
@@ -545,43 +541,44 @@ void game_update(Bitmap* bitmap,
                 keyboard->s_pressed && 
                 keyboard->d_pressed
             ) {
-                player_high->direction = Entity_direction::Front;
+                direction = Entity_direction::Front;
             }
             else if (keyboard->w_pressed && keyboard->a_pressed) {
-                player_high->direction = Entity_direction::Back;
+                direction = Entity_direction::Back;
             }
             else if (keyboard->w_pressed && keyboard->d_pressed) {
-                player_high->direction = Entity_direction::Back;
+                direction = Entity_direction::Back;
             }
             else if (keyboard->s_pressed && keyboard->a_pressed) {
-                player_high->direction = Entity_direction::Front;
+                direction = Entity_direction::Front;
             }            
             else if (keyboard->s_pressed && keyboard->d_pressed) {
-                player_high->direction = Entity_direction::Front;
+                direction = Entity_direction::Front;
             }
             else if (keyboard->w_pressed) {
-                player_high->direction = Entity_direction::Back;
+                direction = Entity_direction::Back;
             }
             else if (keyboard->a_pressed) {
-                player_high->direction = Entity_direction::Left;
+                direction = Entity_direction::Left;
             } 
             else if (keyboard->s_pressed) {
-                player_high->direction = Entity_direction::Front;
+                direction = Entity_direction::Front;
             } 
             else if (keyboard->d_pressed) {
-                player_high->direction = Entity_direction::Right;
+                direction = Entity_direction::Right;
             }
             else {
-                player_high->direction = Entity_direction::Front;
+                direction = Entity_direction::Front;
             }
 
         #if 1
             if (keyboard->r_pressed) {
-                player_high->sim_reg_rel = vec2_f32(0.0f, 0.0f);
+                r_pressed = true;
+                // player_high->sim_reg_rel = vec2_f32(0.0f, 0.0f);
             }
         #endif
 
-        #if 1
+        #if 0
             if (keyboard->left_arrow_pressed) {
                 World_pos player_world_pos = world_pos_from_rel_pos(world, &sim_reg->world_pos, player_high->sim_reg_rel);
                 World_pos sword_world_pos = player_world_pos;
@@ -591,34 +588,57 @@ void game_update(Bitmap* bitmap,
         #endif
         
         }      
-
-        TimeProfile("Time after processing keyboard inputs");
-        
-        F32 player_acceleration_mult = 225;
-        move_entity(game_state,
-            world->player_low_index, 
-            time_elapsed, acceleration_unit_vec, player_acceleration_mult);
-
-        TimeProfile("Time after moving the player entity");
     }
+
+    ///////////////////////////////////////////////////////////
+    // Damian: Idea about how start_end scopes could be more coherent
+    //
+    # if 0
+    #define StartEndScope(start_exp, end_expr, some_code) \
+    { \
+        start_exp; \
+        some_code \
+        end_expr; \
+    }
+    StartEndScope(
+        TimeProfile("Time before starting a simulaton region"),
+        TimeProfile("Time after starting a simulaton region"),
+        { 
+            // Some code here 
+        }
+    );
+    #undef StartEndScope;
+    #endif
+
+    ///////////////////////////////////////////////////////////
+    // Damian: Starting a sim region before updating and drawing the world
+    //
+    TimeProfile("Time before starting a simulaton region")
+    World_pos sim_reg_pos = world->stored_entities[world->player_stored_index].world_pos;
+    S32 chunk_radius = 2;
+    Sim_reg* sim_reg = start_sim_reg(world_arena, &frame_arena, world, sim_reg_pos, chunk_radius); 
+    TimeProfile("Time after starting a simulaton region")
 
     ///////////////////////////////////////////////////////////
     // Damian: Updating high entities
     //         With the current mamory layot, we get a lot of cashe misses,
     //         but for now splitting this into its own loop is fine
     //
-     for (U32 high_entity_index = 0;
-          high_entity_index < world->high_entity_count;
-          high_entity_index += 1
+     for (U32 sim_entity_index = 0;
+          sim_entity_index < sim_reg->sim_entitie_count;
+          sim_entity_index += 1
     ) {
-        High_entity* high = &world->high_entities[high_entity_index];
-        Low_entity* low = &world->low_entities[high->low_index];
+        // TODO: See if get_sim_entity would be nicer to use
+        Sim_entity* sim_entity = &sim_reg->sim_entities[sim_entity_index];
 
-        switch (low->type)
+        switch (sim_entity->stored_variant.type)
         {
             case Entity_type::Player: 
             {
-
+                // TODO: store direction inside the low, so it can be the same through out frames
+                update_player(world, sim_reg,  
+                              sim_entity_index,
+                              acceleration_unit_vec, q_pressed, r_pressed, time_elapsed);
             } break;
 
             case Entity_type::Tree:
@@ -628,7 +648,7 @@ void game_update(Bitmap* bitmap,
 
             case Entity_type::Familiar: 
             {
-                update_familiar(game_state, high->low_index, time_elapsed);
+                // update_familiar(game_state, high->low_index, time_elapsed);
             } break;
 
             case Entity_type::Sword: 
@@ -652,11 +672,10 @@ void game_update(Bitmap* bitmap,
         ///////////////////////////////////////////////////////////
         // Damian: some constans used for drawing
         Vec2_F32 screen_offset        =  vec2_f32(200.0f, 100.0f);
-        World_pos player_world_pos    =  world_pos_from_rel_pos(world, &sim_reg->world_pos, player_high->sim_reg_rel);
-        Assert(player_world_pos.chunk == sim_reg->world_pos.chunk);
         Vec2_F32 tree_00_offset       =  vec2_f32(40.0f, 83.0f);
         Vec2_F32 hero_sprite_offset   =  vec2_f32(72.0f, 182.0f);
         Vec2_F32 rock03_offset        =  vec2_f32(28.0f, 11.0f);
+        Vec2_F32 shadow_offset        = hero_sprite_offset;
         
         draw_black_screen(game_state, bitmap);
 
@@ -665,66 +684,52 @@ void game_update(Bitmap* bitmap,
         #if 1
         // Draw the map (Entities on the map)
         {   
-            // TODO: draw entities better. If an entity is only partly inside a chunk, then draw the part
-            //       also check neighboring chunks to see if there are entites that have parts of them on the current chunk
-            World_pos chunk_to_draw_mid_pos = {};  
-            chunk_to_draw_mid_pos.chunk     = player_world_pos.chunk;
-            chunk_to_draw_mid_pos.chunk_rel = 0.5f * vec2_f32(world->chunk_side_in_m);
-
             // NOTE: for now we expext it to alredy exist
-            Chunk* chunk = get_chunk_in_world__opt(world, chunk_to_draw_mid_pos.chunk);
+            Chunk* chunk = get_chunk_in_world__opt(world, sim_reg->world_pos.chunk);
             Assert(chunk);
 
             TimeProfile("Time after getting a chunk");
 
             B32 profiled = false;
-            for (U32 high_entity_index = 0;
-                 high_entity_index < world->high_entity_count;
-                 high_entity_index += 1
+            for (U32 sim_entity_index = 0;
+                 sim_entity_index < sim_reg->sim_entitie_count;
+                 sim_entity_index += 1
             ) {
-                // NOTE: this is here for assert, but not yet used, since drawing is dumb
-                High_entity* high = &world->high_entities[high_entity_index];
-                Low_entity* low = &world->low_entities[high->low_index];
+                Sim_entity* sim_entity = &sim_reg->sim_entities[sim_entity_index];
 
-                World_pos entity_world_pos = world_pos_from_rel_pos(world, &sim_reg->world_pos, high->sim_reg_rel);
+                World_pos sim_entity_world_pos = world_pos_from_rel_pos(world, &sim_reg->world_pos, sim_entity->sim_reg_rel);
 
-                if (!profiled) TimeProfile("Time after getting low, high, world_pos");
-
-                if (entity_world_pos.chunk == sim_reg->world_pos.chunk)
+                if (sim_entity_world_pos.chunk == sim_reg->world_pos.chunk)
                 {
-                    Vec2_F32 entity_chunk_pos = entity_world_pos.chunk_rel;
+                    Vec2_F32 entity_chunk_pos = sim_entity_world_pos.chunk_rel;
                     
-                    F32 entity_w = low->width;
-                    F32 entity_h = low->height;
+                    F32 entity_w = sim_entity->stored_variant.width;
+                    F32 entity_h = sim_entity->stored_variant.height;
 
                     F32 entity_min_x = screen_offset.x + 
                                     (entity_chunk_pos.x * game_state->px_per_m) -
-                                    (low->width / 2 * game_state->px_per_m);
+                                    (entity_w / 2 * game_state->px_per_m);
                     F32 entity_max_x = entity_min_x + 
                                     (entity_w * game_state->px_per_m);
 
                     F32 entity_max_y = screen_offset.y + 
                                     (world->chunk_side_in_m * game_state->px_per_m) - 
                                     (entity_chunk_pos.y * game_state->px_per_m) + 
-                                    (low->height / 2 * game_state->px_per_m);
+                                    (entity_h / 2 * game_state->px_per_m);
                     F32 entity_min_y = entity_max_y - 
                                     (entity_h * game_state->px_per_m);
 
-                    F32 entity_center_x = 0.5f * (entity_max_x + entity_min_x);
-                    F32 entity_center_y = 0.5f * (entity_max_y + entity_min_y);
+                    F32 entity_center_x_on_screen = 0.5f * (entity_max_x + entity_min_x);
+                    F32 entity_center_y_on_screen = 0.5f * (entity_max_y + entity_min_y);
 
                     if (!profiled) TimeProfile("Time after getting all the screen coords for drawing");
 
-                    if (!profiled) {
-                        Assert(low->type == Entity_type::Player);
-                    }
-
-                    switch (low->type) 
+                    switch (sim_entity->stored_variant.type) 
                     {
                         case Entity_type::Player: 
                         {
                             Player_skin* skin;
-                            switch (player_high->direction) {
+                            switch (direction) {
                                 case Entity_direction::Back: {
                                     skin = &game_state->player_skin_back; 
                                 } break;
@@ -745,55 +750,48 @@ void game_update(Bitmap* bitmap,
                                     InvalidCodePath;
                                 } break;
                             }
-                                                
-                            Vec2_F32 shadow_offset = hero_sprite_offset;
-                            F32 mid_legs_on_screen_x = screen_offset.x + 
-                                                    (player_world_pos.chunk_rel.x  * game_state->px_per_m);
-                            F32 mid_legs_on_screen_y = screen_offset.y + 
-                                                    (world->chunk_side_in_m * game_state->px_per_m) - 
-                                                    (player_world_pos.chunk_rel.y * game_state->px_per_m);
                             
                             if (!profiled) TimeProfile("Time before drawing the bitmaps for the player");
 
                             draw_bitmap(game_state->player_shadow, 
                                 bitmap, 
-                                mid_legs_on_screen_x, mid_legs_on_screen_y,
+                                entity_center_x_on_screen, entity_center_y_on_screen,
                                 shadow_offset.x, shadow_offset.y); 
                             if (!profiled) TimeProfile("Time after the first bitmap");
 
                             draw_bitmap(skin->torso, 
                                 bitmap, 
-                                mid_legs_on_screen_x, mid_legs_on_screen_y,
+                                entity_center_x_on_screen, entity_center_y_on_screen,
                                 hero_sprite_offset.x, hero_sprite_offset.y); 
                             if (!profiled) TimeProfile("Time after the second bitmap");
                             
                             draw_bitmap(skin->cape, 
                                 bitmap, 
-                                mid_legs_on_screen_x, mid_legs_on_screen_y,
+                                entity_center_x_on_screen, entity_center_y_on_screen,
                                 hero_sprite_offset.x, hero_sprite_offset.y);
                             if (!profiled) TimeProfile("Time after the third bitmap");
                             
                             draw_bitmap(skin->head, 
                                 bitmap, 
-                                mid_legs_on_screen_x, mid_legs_on_screen_y,
+                                entity_center_x_on_screen, entity_center_y_on_screen,
                                 hero_sprite_offset.x, hero_sprite_offset.y);
                             if (!profiled) TimeProfile("Time after the fourth bitmap");
 
-                            draw_rect(bitmap,
-                                mid_legs_on_screen_x, mid_legs_on_screen_y,
-                                mid_legs_on_screen_x, mid_legs_on_screen_y,
-                                0, 255, 0);
-                            if (!profiled) TimeProfile("Time after the fifth bitmap");
+                            // draw_rect(bitmap,
+                            //     entity_center_x_on_screen, entity_center_y_on_screen,
+                            //     entity_center_x_on_screen + 10, entity_center_y_on_screen + 10,
+                            //     0, 255, 0);
+                            // if (!profiled) TimeProfile("Time after the fifth bitmap");
 
-                            draw_hitpoint(bitmap, low, vec2_f32(mid_legs_on_screen_x, mid_legs_on_screen_y));
-                            if (!profiled) TimeProfile("Time after hitpoints");
+                            // draw_hitpoint(bitmap, sim_entity, vec2_f32(mid_legs_on_screen_x, mid_legs_on_screen_y));
+                            // if (!profiled) TimeProfile("Time after hitpoints");
 
                         } break;
                         
                         case Entity_type::Tree: 
                         {
                             draw_bitmap(game_state->tree_00, bitmap, 
-                                entity_center_x, entity_center_y,
+                                entity_center_x_on_screen, entity_center_y_on_screen,
                                 tree_00_offset.x, tree_00_offset.y
                             );
 
@@ -802,29 +800,31 @@ void game_update(Bitmap* bitmap,
                                 entity_max_x, entity_max_y,
                                 100, 0, 0 
                             );
+
+                            DebugStopHere;
                         } break;
 
                         case Entity_type::Familiar: 
                         {
-                            draw_bitmap(game_state->player_skin_back.head, bitmap, 
-                                entity_center_x, entity_center_y,
-                                hero_sprite_offset.x, hero_sprite_offset.y
-                            );
+                            // draw_bitmap(game_state->player_skin_back.head, bitmap, 
+                            //     entity_center_x, entity_center_y,
+                            //     hero_sprite_offset.x, hero_sprite_offset.y
+                            // );
                         } break;
 
                         
                         case Entity_type::Sword:
                         {
-                            draw_bitmap(game_state->rock03, bitmap, 
-                                entity_center_x, entity_center_y,
-                                rock03_offset.x, rock03_offset.y
-                            );
+                            // draw_bitmap(game_state->rock03, bitmap, 
+                            //     entity_center_x, entity_center_y,
+                            //     rock03_offset.x, rock03_offset.y
+                            // );
                             
-                            draw_rect(bitmap, 
-                                entity_min_x, entity_min_y,
-                                entity_max_x, entity_max_y,
-                                100, 0, 0 
-                            );
+                            // draw_rect(bitmap, 
+                            //     entity_min_x, entity_min_y,
+                            //     entity_max_x, entity_max_y,
+                            //     100, 0, 0 
+                            // );
                         } break;
                         
                         default: {
@@ -917,7 +917,7 @@ void game_update(Bitmap* bitmap,
         }
         #endif
 
-        #if 1
+        #if 0
         // Draw the base point of the player
         {
             F32 player_base_on_screen_x = screen_offset.x + 
@@ -976,7 +976,9 @@ void game_update(Bitmap* bitmap,
     // Damian: Clearing out resources
     //
     frame_count += 1;
+    end_sim_reg(world, sim_reg);
     arena_uninnit(&frame_arena);
+    // TODO: make sure everything is cleared on the arena
     
     #undef TimeProfile
 }

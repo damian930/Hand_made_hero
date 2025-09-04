@@ -38,19 +38,6 @@ struct Player_skin {
     Loaded_bitmap torso;
 };
 
-struct Sim_reg {
-    World_pos world_pos;     // NOTE: this is the mid chunk of the sim region
-    S32 chunks_from_mid_chunk;   
-};
-
-# if 0
-struct Camera_region {
-    World_pos world_pos;   // NOTE: this is the middle of the camera region
-    F32 width;
-    F32 height;
-};
-#endif
-
 struct Game_state {
     B32 is_initialised;
     F32 background_offset;
@@ -60,11 +47,6 @@ struct Game_state {
     F32 px_per_m;
     
     World world;
-
-    Sim_reg sim_reg;
-    
-    // NOTE: this is here for now
-    B32 does_sword_exist;
 
     Player_skin player_skin_front;
     Player_skin player_skin_back;
