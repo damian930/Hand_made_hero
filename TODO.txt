@@ -8,18 +8,17 @@
 -- Improve the build: have more errors, warning shown and stuff like that
 
 === Current Goal
--- ...
+-- Add a way to get some more stored enetities for collioson, 
+   this is needed so entities dont accidentally move into each other
+
+-- Add the Sword back, add an ability to throw it
 
 === Stuff that workd but i need to fix it 
--- Remove "this_is_a_part_of_not_having_branes" inside fix_camera_world_invariant and update it better
 -- Compile into a dll for more convinient reload
 
 === Ideas
--- Have a sym_region be a region that gets simulated based on something, for example a player. 
-   Have a camera region be similar to sym_region but it will be used for drawing, 
-   it then can be aplyid to different entities i guess.
-   Both of them can have a similar scheme for local F32 type storage and them World_pos for global pos of reference
-   
+
+
 
 
 

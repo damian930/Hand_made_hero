@@ -42,7 +42,6 @@ typedef PlatformSpecificGetPerfCounter(platform_get_perf_counter);
 
 // =========================================================
 
-
 struct Bitmap {
     U32 width;
     U32 height;

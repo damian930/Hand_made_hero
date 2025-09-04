@@ -1,12 +1,14 @@
 #ifndef AUGUST_H
 #define AUGUST_H
 
-// TODO: remove these
 #include "base.h"
 #include "math.h"
 #include "world.h"
 
-// These are for the game to fucntion 
+///////////////////////////////////////////////////////////
+// Damian: These are for the game to fucntion 
+//
+//  
 struct Loaded_bitmap {
 	U32* pixels;
     // uint32 compression;
@@ -18,25 +20,15 @@ struct Loaded_bitmap {
     U32 blue_mask;
     U32 alpha_mask;
 };
-// ===========================================
-
-#if 0
-struct Player {
-    // NOTE: this represents the mid point of the player 
-    Vec2_F32 sim_reg_rel;
-
-    Vec2_F32 speed;
-    F32 width;
-    F32 height;
-    Entity_direction direction;
-};
-#endif
 
 struct Player_skin {
     Loaded_bitmap head;
     Loaded_bitmap cape;
     Loaded_bitmap torso;
 };
+
+// struct Entity_skin {
+// };
 
 struct Game_state {
     B32 is_initialised;

@@ -421,7 +421,7 @@ void game_update(Bitmap* bitmap,
             World_pos familiar_world_pos = {};
             familiar_world_pos.chunk = vec2_s32(0, 0);
             familiar_world_pos.chunk_rel = 0.25f * vec2_f32(world->chunk_side_in_m);
-            // spawn_familiar(world_arena, world, familiar_world_pos, 0);
+            spawn_familiar(world_arena, world, familiar_world_pos, world->player_stored_index);
         }
 
         ///////////////////////////////////////////////////////////
@@ -496,14 +496,14 @@ void game_update(Bitmap* bitmap,
     }
 
     ///////////////////////////////////////////////////////////
-    // Damian: some game_state unwrapped structs for easier referencing
+    // Damian: Some game_state unwrapped structs for easier referencing
     //
     Arena frame_arena  = arena_init(mem->frame_mem, mem->frame_mem_size);
     Arena* world_arena = &game_state->arena; 
     World* world       = &game_state->world;
     
     ///////////////////////////////////////////////////////////
-    // Damian: things to time profile profile 
+    // Damian: Things to time profile profile 
     //
     Frame_time_profiling_stack profiling_stack = {};
     U64 frame_start_perf_count = platform_things->get_perf_counter();
@@ -511,84 +511,6 @@ void game_update(Bitmap* bitmap,
     #define TimeProfile(note) time_profile(&frame_arena, \
                                 String8FromClit(&frame_arena, note), \
                                 &profiling_stack, platform_things, frame_start_perf_count);
-
-    ///////////////////////////////////////////////////////////
-    // Damian: getting data to then move the player
-    //
-    Vec2_F32 acceleration_unit_vec = {};
-    B32 q_pressed                  = false;
-    B32 r_pressed                  = false;
-    Entity_direction direction     = Entity_direction::Back;
-    {
-        if (keyboard->is_used) 
-        {   
-            if (keyboard->w_pressed) { acceleration_unit_vec.y = 1.0f; }
-            if (keyboard->a_pressed) { acceleration_unit_vec.x = -1.0f; } 
-            if (keyboard->s_pressed) { acceleration_unit_vec.y = -1.0f; } 
-            if (keyboard->d_pressed) { acceleration_unit_vec.x = 1.0f; }
-            if (keyboard->q_pressed) {
-                q_pressed = true;
-                //player_low->speed = vec2_f32(0.0f, 0.0f);
-            }
-
-            if (acceleration_unit_vec.x != 0.0f && acceleration_unit_vec.y != 0.0f) {
-                acceleration_unit_vec = vec2_f32(0.7071f, 0.7071f) * acceleration_unit_vec;
-            }
-
-            // Geting the direction for the player
-            if (keyboard->w_pressed && 
-                keyboard->a_pressed && 
-                keyboard->s_pressed && 
-                keyboard->d_pressed
-            ) {
-                direction = Entity_direction::Front;
-            }
-            else if (keyboard->w_pressed && keyboard->a_pressed) {
-                direction = Entity_direction::Back;
-            }
-            else if (keyboard->w_pressed && keyboard->d_pressed) {
-                direction = Entity_direction::Back;
-            }
-            else if (keyboard->s_pressed && keyboard->a_pressed) {
-                direction = Entity_direction::Front;
-            }            
-            else if (keyboard->s_pressed && keyboard->d_pressed) {
-                direction = Entity_direction::Front;
-            }
-            else if (keyboard->w_pressed) {
-                direction = Entity_direction::Back;
-            }
-            else if (keyboard->a_pressed) {
-                direction = Entity_direction::Left;
-            } 
-            else if (keyboard->s_pressed) {
-                direction = Entity_direction::Front;
-            } 
-            else if (keyboard->d_pressed) {
-                direction = Entity_direction::Right;
-            }
-            else {
-                direction = Entity_direction::Front;
-            }
-
-        #if 1
-            if (keyboard->r_pressed) {
-                r_pressed = true;
-                // player_high->sim_reg_rel = vec2_f32(0.0f, 0.0f);
-            }
-        #endif
-
-        #if 0
-            if (keyboard->left_arrow_pressed) {
-                World_pos player_world_pos = world_pos_from_rel_pos(world, &sim_reg->world_pos, player_high->sim_reg_rel);
-                World_pos sword_world_pos = player_world_pos;
-                sword_world_pos.chunk_rel += vec2_f32(3.0f, 0.0f);
-                spawn_sword(game_state, sword_world_pos);
-            }
-        #endif
-        
-        }      
-    }
 
     ///////////////////////////////////////////////////////////
     // Damian: Idea about how start_end scopes could be more coherent
@@ -614,7 +536,13 @@ void game_update(Bitmap* bitmap,
     // Damian: Starting a sim region before updating and drawing the world
     //
     TimeProfile("Time before starting a simulaton region")
-    World_pos sim_reg_pos = world->stored_entities[world->player_stored_index].world_pos;
+    // TODO: need a better scheme for this
+    World_pos sim_reg_pos = {};
+    {
+        Vec2_S32 player_chunk = world->stored_entities[world->player_stored_index].world_pos.chunk;
+        sim_reg_pos.chunk     = player_chunk;
+        sim_reg_pos.chunk_rel = 0.5f * vec2_f32(world->chunk_side_in_m); 
+    }
     S32 chunk_radius = 2;
     Sim_reg* sim_reg = start_sim_reg(world_arena, &frame_arena, world, sim_reg_pos, chunk_radius); 
     TimeProfile("Time after starting a simulaton region")
@@ -638,7 +566,8 @@ void game_update(Bitmap* bitmap,
                 // TODO: store direction inside the low, so it can be the same through out frames
                 update_player(world, sim_reg,  
                               sim_entity_index,
-                              acceleration_unit_vec, q_pressed, r_pressed, time_elapsed);
+                              keyboard, 
+                              time_elapsed);
             } break;
 
             case Entity_type::Tree:
@@ -648,7 +577,7 @@ void game_update(Bitmap* bitmap,
 
             case Entity_type::Familiar: 
             {
-                // update_familiar(game_state, high->low_index, time_elapsed);
+                update_familiar(world, sim_reg, sim_entity_index, time_elapsed);
             } break;
 
             case Entity_type::Sword: 
@@ -729,17 +658,17 @@ void game_update(Bitmap* bitmap,
                         case Entity_type::Player: 
                         {
                             Player_skin* skin;
-                            switch (direction) {
-                                case Entity_direction::Back: {
-                                    skin = &game_state->player_skin_back; 
+                            switch (sim_entity->stored_variant.direction) {
+                                case Entity_direction::Backward: {
+                                    skin = &game_state->player_skin_front; 
                                 } break;
 
                                 case Entity_direction::Right: {
                                     skin = &game_state->player_skin_right; 
                                 } break;
 
-                                case Entity_direction::Front: {
-                                    skin = &game_state->player_skin_front; 
+                                case Entity_direction::Forward: {
+                                    skin = &game_state->player_skin_back; 
                                 } break;
 
                                 case Entity_direction::Left: {
@@ -806,10 +735,10 @@ void game_update(Bitmap* bitmap,
 
                         case Entity_type::Familiar: 
                         {
-                            // draw_bitmap(game_state->player_skin_back.head, bitmap, 
-                            //     entity_center_x, entity_center_y,
-                            //     hero_sprite_offset.x, hero_sprite_offset.y
-                            // );
+                            draw_bitmap(game_state->player_skin_back.head, bitmap,
+                                entity_center_x_on_screen, entity_center_y_on_screen,
+                                hero_sprite_offset.x, hero_sprite_offset.y
+                            );
                         } break;
 
                         

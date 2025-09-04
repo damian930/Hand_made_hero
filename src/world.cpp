@@ -1,5 +1,6 @@
 #include "world.h"
 #include "august.h"
+#include "game_platform_comunication.h"
 
 ///////////////////////////////////////////////////////////
 // Damian: Chunk stuff
@@ -162,6 +163,7 @@ World_pos world_pos_from_rel_pos(World* world, World_pos* world_pos, Vec2_F32 re
 ///////////////////////////////////////////////////////////
 // Damian: sim_reg stuff
 //
+// --------------------------------------------------------
 // TODO: see if tese type of functs are common, if yes, maybe use something like a a rectagle to store bound.
 //       or just use a func that operates on a ractagle data, 
 //       but then enything can be passed it, it just has to be describes as a rect
@@ -215,116 +217,6 @@ Stored_entity* get_low_entity_from_entity_block(World* world, Entity_block* bloc
     return stored;
 }
 
-#if 0
-B32 convert_low_entity_to_high(World* world, Sim_reg* sim_reg, U32 low_index) 
-{
-    Assert(world->high_entity_count < ArrayCount(world->high_entities));
-    
-    Low_entity* low = get_low_entity(world, low_index);
-    B32 did_convert = false;
-    
-    if (!low->is_also_high && 
-        is_world_pos_within_sim_reg(world, sim_reg, low->world_pos)
-    ) {
-        did_convert = true;
-
-        U32 new_high_index = world->high_entity_count++; 
-        low->is_also_high = true;
-        low->high_idx = new_high_index;
-
-        High_entity* new_high = &world->high_entities[new_high_index];
-        new_high->sim_reg_rel = sim_reg_rel_from_world_pos(world, sim_reg, &low->world_pos);
-        new_high->direction   = Entity_direction::Back;
-        new_high->low_index   = low_index;
-    }
-
-    return did_convert;
-}
-#endif
-
-#if 0
-B32 convert_high_entity_to_low(World* world, Sim_reg* sim_reg, U32 low_index)
-{
-    Low_entity* low = get_low_entity(world, low_index);
-    
-    if (!low->is_also_high) {
-        return false;
-    }
-
-    High_entity* high = &world->high_entities[low->high_idx];
-
-    low->world_pos = world_pos_from_rel_pos(world, &sim_reg->world_pos, high->sim_reg_rel);
-
-    U32 last_high_index = world->high_entity_count - 1;
-    U32 high_index_to_delete = low->high_idx;
-    
-    if (high_index_to_delete != last_high_index)
-    {
-        High_entity* high_to_delete = &world->high_entities[low->high_idx]; 
-        High_entity* last_high = &world->high_entities[last_high_index];
-        *high_to_delete = *last_high;
-        world->low_entities[last_high->low_index].high_idx = high_index_to_delete;
-    }
-    world->high_entity_count -= 1;
-    low->is_also_high = false;
-
-    return true;
-}
-#endif
-
-#if 0
-file_private
-void unload_chunk(World* world, Vec2_S32 chunk_pos)
-{
-    Chunk* chunk = get_chunk_in_world__opt(world, chunk_pos);
-
-    // NOTE: Since we are unloading the chunk, it should alredy be created
-    Assert(chunk);
-
-    for (Entity_block* block_it = &chunk->entity_block;
-            block_it != 0;
-            block_it = block_it->next_block     
-    ) {
-        for (U32 low_index_inside_block = 0;
-                low_index_inside_block < block_it->low_indexes_count;
-                low_index_inside_block += 1     
-        ) {
-            U32 low_index = block_it->low_indexes[low_index_inside_block];
-            Low_entity* low = get_low_entity(world, low_index);
-
-            // NOTE: Since we are unloading, entity inside this chunk, shoud be high
-            Assert(low->is_also_high);
-
-            convert_high_entity_to_low(world, low_index);
-        }
-    }
-}
-
-file_private
-void load_chunk(Arena* world_arena, World* world, Camera_* camera, Vec2_S32 chunk_pos)
-{
-    Chunk* chunk = get_chunk_in_world__spawns(world_arena, world, chunk_pos);
-
-    for (Entity_block* block_it = &chunk->entity_block;
-            block_it != 0;
-            block_it = block_it->next_block     
-    ) {
-        for (U32 low_index_inside_block = 0;
-                low_index_inside_block < block_it->low_indexes_count;
-                low_index_inside_block += 1     
-        ) {
-            U32 low_index = block_it->low_indexes[low_index_inside_block];
-            Low_entity* low = get_low_entity(world, low_index);
-
-            // NOTE: Since we are loading, entity inside this chunk cant alredy be high
-            Assert(!low->is_also_high);
-
-            convert_low_entity_to_high(world, camera, low_index);
-        }
-    }
-}
-#endif
-
 void spawn_entity(Arena* world_arena, World* world, Stored_entity new_stored) 
 {
     Assert(world->stored_entity_count < ArrayCount(world->stored_entities));
@@ -374,6 +266,7 @@ void spawn_player(Arena* world_arena, World* world, World_pos player_mid_pos)
     new_entity.height     = 0.55f;
     new_entity.speed      = vec2_f32(0.0f, 0.0f);
     new_entity.world_pos  = player_mid_pos;
+    new_entity.direction  = Entity_direction::Backward;
     new_entity.type       = Entity_type::Player;
     new_entity.has_hp     = true;
     new_entity.hp         = 3;
@@ -395,9 +288,9 @@ void spawn_tree(Arena* world_arena, World* world, World_pos tree_mid_pos)
     spawn_entity(world_arena, world, new_entity);
 }
 
-#if 0
+#if 1
 void spawn_familiar(Arena* world_arena, World* world,  
-                    World_pos familiar_world_pos, U32 high_entity_to_track_index 
+                    World_pos familiar_world_pos, U32 stored_entity_to_track_index 
 ) { 
     Stored_entity new_entity = {};
     new_entity.width  = 1.0f;
@@ -405,15 +298,15 @@ void spawn_familiar(Arena* world_arena, World* world,
     new_entity.speed  = vec2_f32(0.0f, 0.0f);
     new_entity.world_pos = familiar_world_pos;
     new_entity.type   = Entity_type::Familiar;
-    
+
     new_entity.has_entity_to_track = true;
-    new_entity.high_entity_to_track_index = high_entity_to_track_index;
+    new_entity.stored_entity_to_track_index = stored_entity_to_track_index;
 
     spawn_entity(world_arena, world, new_entity);
 }
 #endif
 
-void spawn_sword(Arena* world_arena, World* world, World_pos sword_world_pos) 
+void spawn_sddaword(Arena* world_arena, World* world, World_pos sword_world_pos) 
 { 
     Stored_entity new_entity = {};
     new_entity.width      = 1.0f;
@@ -425,162 +318,6 @@ void spawn_sword(Arena* world_arena, World* world, World_pos sword_world_pos)
 
     spawn_entity(world_arena, world, new_entity);
 }
-
-#if 0
-B32 validate_low_high_entity_pairs(World* world)
-{
-    B32 is_valid = true;
-    for (U32 low_index = 0; low_index < world->low_entity_count; low_index += 1)
-    {
-        Low_entity* low = get_low_entity(world, low_index);
-        if (low->is_also_high)
-        {
-            is_valid = (world->high_entities[low->high_idx].low_index == low_index); 
-            if (!is_valid) {
-                break;
-            }
-        }
-    }
-    return is_valid;
-}
-#endif
-
-#if 0
-// NOTE: This is the main function that takes care of World simulation region
-//       and camera relative both for the player and the entities
-B32 fix_sim_reg_world_invariant(Arena* world_arena,
-                                World* world, 
-                                Sim_reg* sim_reg 
-) {
-    Assert(validate_low_high_entity_pairs(world));
-    
-    Low_entity* player_low = get_low_entity(world, world->player_low_index);
-    Assert(player_low->is_also_high);
-    High_entity* player_high = &world->high_entities[player_low->high_idx];
-
-    World_pos player_world_pos = world_pos_from_rel_pos(world, &sim_reg->world_pos, player_high->sim_reg_rel);
-    if (player_world_pos.chunk == sim_reg->world_pos.chunk) {
-        return false;
-    }
-
-    ///////////////////////////////////////////////////////////
-    // Damian: have to move entites from high to low
-    //
-    // NOTE: since we are about to move the sim region placement,
-    //       we have to convert current high into low, under the current sim_reg regime 
-    #define this_is_a_part_of_not_having_branes
-    this_is_a_part_of_not_having_branes {
-        Assert(world->low_entities[world->high_entities[0].low_index].type == Entity_type::Player);
-    
-        for (U32 high_entity_index = 0;
-             high_entity_index < world->high_entity_count;
-             high_entity_index += 0
-        ) {
-            High_entity* high = &world->high_entities[high_entity_index];
-
-            if (high->low_index != world->player_low_index)
-            {
-                Low_entity* low = &world->low_entities[high->low_index];
-
-                if (low->type == Entity_type::Familiar) {
-                    DebugStopHere;
-                }
-
-                B32 converted = convert_high_entity_to_low(world, sim_reg, high->low_index);
-                if (converted) {
-                    // NOTE: convert_high_entity_to_low will do the += 1 for the iteration,
-                    //       its kinda not great this way
-                } 
-                else {
-                    InvalidCodePath;
-                }
-            }
-            else {
-                high_entity_index += 1;
-            }
-
-        }
-    }
-    // =========================================
-
-    ///////////////////////////////////////////////////////////
-    // Damian: move the camera
-    //
-    sim_reg->world_pos.chunk = player_world_pos.chunk;
-    sim_reg->world_pos.chunk_rel = 0.5f * vec2_f32(world->chunk_side_in_m);
-    
-    ///////////////////////////////////////////////////////////
-    // Damian: change the player rel
-    // 
-    Vec2_F32 new_player_rel = sim_reg_rel_from_world_pos(world, sim_reg, &player_world_pos);
-    player_high->sim_reg_rel = new_player_rel;
-    Assert(is_sim_reg_rel_pos_within_sim_reg_bounds(world, sim_reg, player_high->sim_reg_rel));
-
-    Vec2_F32 correct_player_rel = player_high->sim_reg_rel;
-
-    ///////////////////////////////////////////////////////////
-    // Damian: spawn chunks that are to be simualated, 
-    //         redo high entities
-    // 
-    Vec2_S32 min_high_chunk = sim_reg->world_pos.chunk - vec2_s32(sim_reg->chunks_from_mid_chunk);
-    Vec2_S32 max_high_chunk = sim_reg->world_pos.chunk + vec2_s32(sim_reg->chunks_from_mid_chunk);
-
-    // NOTE: This is the current version of moving low to high and high into low when camera moved
-    // TODO: Do it like you have funcking brains
-
-    for (S32 high_chunk_y = min_high_chunk.y;
-         high_chunk_y <= max_high_chunk.y;
-         high_chunk_y += 1     
-    ) {
-        for (S32 high_chunk_x = min_high_chunk.x;
-             high_chunk_x <= max_high_chunk.x;
-             high_chunk_x += 1     
-        ) { 
-            Chunk* chunk = get_chunk_in_world__spawns(world_arena, world, vec2_s32(high_chunk_x, high_chunk_y));
-
-            for (Entity_block* block_it = &chunk->entity_block;
-                 block_it != 0;
-                 block_it = block_it->next_block     
-            ) {
-                for (U32 low_index_inside_block = 0;
-                     low_index_inside_block < block_it->low_indexes_count;
-                     low_index_inside_block += 1     
-                ) {
-                    // TODO: Need to get newly high into high
-                    //       Need to get the newly low out of high
-                    U32 low_index = block_it->low_indexes[low_index_inside_block];
-                    Low_entity* low = get_low_entity(world, low_index);
-
-                    this_is_a_part_of_not_having_branes {
-                        if (low->type != Entity_type::Player) {
-                            low->is_also_high = false;
-                            
-                            B32 converted = convert_low_entity_to_high(world, sim_reg, low_index);
-                            Assert(converted);
-                        }
-                        else {
-                            DebugStopHere;
-                        }
-                    }
-
-                    if (correct_player_rel != player_high->sim_reg_rel) {
-                        DebugStopHere;
-                    }
-
-                }
-            }
-
-        }
-    }
-
-    DebugStopHere;
-    Assert(validate_low_high_entity_pairs(world));
-
-    #undef this_is_a_part_of_not_having_branes
-
-    return true;
-}
-#endif
 
 ///////////////////////////////////////////////////////////
 // Damian: move the player stuff struct 
@@ -620,25 +357,48 @@ F32 get_ray_intersection_time(
 
 // TODO: move these parametes into a more coherent struct
 //       then store some data inside the entities when spawning that relates the update policy for their type
+struct Entity_movement_data {
+    // TODO: see if passing a non unit vector is more comfortable
+    F32 time_elapsed;
+    Vec2_F32 acceleration_unit_vec;
+    F32 acceleration_mult;
+};
 void move_entity(World* world, Sim_reg* sim_reg, 
                  U32 sim_entity_index,         
-                 F32 time_elapsed, Vec2_F32 acceleration_unit_vec, F32 acceleration_mult
+                 Entity_movement_data* movement_data
 ) {
     Sim_entity* sim_entity = &sim_reg->sim_entities[sim_entity_index];
 
-    // Arena* world_arena = &game_state->arena;
-    F32 t = time_elapsed;
-    Vec2_F32 a = acceleration_unit_vec * acceleration_mult;
-    Vec2_F32 new_speed = sim_entity->stored_variant.speed + (a * t);
-    Vec2_F32 displacement = (a/2 * t*t) + (sim_entity->stored_variant.speed * t);
-    new_speed /= 1.5f; // NOTE: this is something like friction but a very vanila hardcoded version
+    if (sim_entity->stored_variant.type == Entity_type::Player)
+    {
+        if ((U32)sim_entity->stored_variant.direction != 0) {
+            DebugStopHere;
+        }
+    } 
 
+    ///////////////////////////////////////////////////////////
+    // Damian: Calculating movement data
+    //
+    // --------------------------------------------------------
+    // TODO: see if acceleration_mult is something that should just be stored inside the stored entity
+    F32 t                 = movement_data->time_elapsed;
+    F32 acceleration_mult = movement_data->acceleration_mult;
+    Vec2_F32 a            = movement_data->acceleration_unit_vec * acceleration_mult; 
+    Vec2_F32 new_speed    = sim_entity->stored_variant.speed + (a * t);
+    Vec2_F32 displacement = (0.5f * a * t*t) + (sim_entity->stored_variant.speed * t);
+    // NOTE: this is something like friction but a very vanila hardcoded version
+    new_speed /= 1.5f; 
+
+    ///////////////////////////////////////////////////////////
+    // Damian: Doing collision detection
+    //
     if (displacement != vec2_f32(0.0f, 0.0f)) 
     {
         Vec2_S32 min_high_chunk = sim_reg->world_pos.chunk - vec2_s32(sim_reg->chunks_from_mid_chunk);
         Vec2_S32 max_high_chunk = sim_reg->world_pos.chunk + vec2_s32(sim_reg->chunks_from_mid_chunk);
         
-        // We are trying to get these values in the following loop
+        ///////////////////////////////////////////////////////////
+        // Damian: We are trying to get these values from the following loop
         F32 min_time = 1.0f;
         Vec2_S32 wall_hit_direction_unit = {};
 
@@ -728,82 +488,189 @@ void move_entity(World* world, Sim_reg* sim_reg,
                 }
                 
             }
-
-            ///////////////////////////////////////////////////////////
-            // Damian: moving the player, adjusting the speed vector when colision
-            //
-            Vec2_F32 corrected_displacement = displacement * min_time;
-            sim_entity->sim_reg_rel += corrected_displacement;
-            if (min_time != 1.0f) 
-            {
-                sim_entity->stored_variant.speed = vec2_f32(0.0f);
-
-                #if 0
-                Vec2_F32 displacement_after_collision = displacement - corrected_displacement; 
-                Vec2_F32 wall_unit_vec_as_f32 = {};
-                wall_unit_vec_as_f32.x = (F32)wall_hit_direction_unit.x;
-                wall_unit_vec_as_f32.y = (F32)wall_hit_direction_unit.y;
-                
-                Vec2_F32 projected_onto_the_wall = vec2_f32_dot(displacement_after_collision, wall_unit_vec_as_f32) * wall_unit_vec_as_f32; 
-                // Vec2_F32 projected_as_unit_vec = vec2_f32_unit(projected_onto_the_wall);
-                Vec2_F32 projected_with_same_length = wall_unit_vec_as_f32 * vec2_f32_len(displacement_after_collision);  
-
-                // low->speed = projected_with_same_length * low->speed * 20;
-
-                Vec2_F32 temp = vec2_f32_dot(low->speed, wall_unit_vec_as_f32) * wall_unit_vec_as_f32;
-                low->speed = (wall_unit_vec_as_f32 * low->speed) - temp;
-                // Entity.High->dP = Entity.High->dP - 1*Inner(Entity.High->dP, WallNormal)*WallNormal;
-                #endif
-            }
-            else {
-                sim_entity->stored_variant.speed = new_speed;    
-            }
             
-            // NOTE: this wont be hapening, since move is only for a sim set now,
-            //       end the invariant will be dont via end_sim_region func
-            // fix_sim_reg_world_invariant(world_arena, world, sim_reg);
+        }
+        ///////////////////////////////////////////////////////////
+        // Damian: moving the player, adjusting the speed vector when colision
+        //
+        Vec2_F32 corrected_displacement = displacement * min_time;
+        sim_entity->sim_reg_rel += corrected_displacement;
+        if (min_time != 1.0f) 
+        {
+            sim_entity->stored_variant.speed = vec2_f32(0.0f);
+
+            #if 0
+            Vec2_F32 displacement_after_collision = displacement - corrected_displacement; 
+            Vec2_F32 wall_unit_vec_as_f32 = {};
+            wall_unit_vec_as_f32.x = (F32)wall_hit_direction_unit.x;
+            wall_unit_vec_as_f32.y = (F32)wall_hit_direction_unit.y;
+            
+            Vec2_F32 projected_onto_the_wall = vec2_f32_dot(displacement_after_collision, wall_unit_vec_as_f32) * wall_unit_vec_as_f32; 
+            // Vec2_F32 projected_as_unit_vec = vec2_f32_unit(projected_onto_the_wall);
+            Vec2_F32 projected_with_same_length = wall_unit_vec_as_f32 * vec2_f32_len(displacement_after_collision);  
+
+            // low->speed = projected_with_same_length * low->speed * 20;
+
+            Vec2_F32 temp = vec2_f32_dot(low->speed, wall_unit_vec_as_f32) * wall_unit_vec_as_f32;
+            low->speed = (wall_unit_vec_as_f32 * low->speed) - temp;
+            // Entity.High->dP = Entity.High->dP - 1*Inner(Entity.High->dP, WallNormal)*WallNormal;
+            #endif
+        }
+        else {
+            sim_entity->stored_variant.speed = new_speed;    
         }
     }
 
 }
+
+// TODO: see if using indexes is better when refering to the simulated intities
+//       maybe use both (pointer + index), SOME FOOD FOR THOUGHT
 
 ///////////////////////////////////////////////////////////
 // Damian: more entity stuff, particularly update functions
 //
 void update_player(World* world, Sim_reg* sim_reg, 
                    U32 sim_entity_index, 
-                   Vec2_F32 acceleration_unit_vec, 
-                   B32 q_pressed, B32 r_pressed, F32 time_elapsed
+                   Keyboard_input* keyboard,
+                   F32 time_elapsed
 ) {
-    F32 player_acceleration_mult = 225;
+    Sim_entity* sim_entity = &sim_reg->sim_entities[sim_entity_index];
+
+    ///////////////////////////////////////////////////////////
+    // Damian: Processing keyboard input and preparing data for moving the player
+    //
+    Vec2_F32 acceleration_unit_vec = {};
+    if (keyboard->is_used) 
+    {   
+        if (keyboard->w_pressed) { acceleration_unit_vec.y = 1.0f; }
+        if (keyboard->a_pressed) { acceleration_unit_vec.x = -1.0f; } 
+        if (keyboard->s_pressed) { acceleration_unit_vec.y = -1.0f; } 
+        if (keyboard->d_pressed) { acceleration_unit_vec.x = 1.0f; }
+        if (keyboard->q_pressed) {
+            sim_reg->sim_entities[sim_entity_index].stored_variant.speed = vec2_f32(0.0f, 0.0f); 
+        }
+
+        F32 diagonal_unit_len = 0.7071f;
+        if (acceleration_unit_vec.x != 0.0f && acceleration_unit_vec.y != 0.0f) {
+            acceleration_unit_vec = vec2_f32(diagonal_unit_len) * acceleration_unit_vec;
+        }
+
+        ///////////////////////////////////////////////////////////
+        // Damian: Acceleration based direction
+        Vec2_F32 forward_vec        = vec2_f32(0.0f, 1.0f);
+        Vec2_F32 forward_right_vec  = vec2_f32(diagonal_unit_len, diagonal_unit_len);
+        
+        Vec2_F32 right_vec          = vec2_f32(1.0f, 0.0f);
+        Vec2_F32 backward_right_vec = vec2_f32(diagonal_unit_len, -diagonal_unit_len);
+        
+        Vec2_F32 backward_vec       = vec2_f32(0.0f, -1.0f);
+        Vec2_F32 backward_left_vec  = vec2_f32(-diagonal_unit_len, -diagonal_unit_len);
+        
+        Vec2_F32 left_vec           = vec2_f32(-1.0f, 0.0f);
+        Vec2_F32 forward_left_vec   = vec2_f32(-diagonal_unit_len, diagonal_unit_len);
+
+        Entity_direction* player_direction = &sim_entity->stored_variant.direction;
+        if (acceleration_unit_vec == forward_vec) {
+            *player_direction = Entity_direction::Forward;
+        }            
+        else if (acceleration_unit_vec == forward_right_vec) {
+            *player_direction = Entity_direction::Forward;
+        }
+        else if (acceleration_unit_vec == right_vec) {
+            *player_direction = Entity_direction::Right;
+        }
+        else if (acceleration_unit_vec == backward_right_vec) {
+            *player_direction = Entity_direction::Backward;
+        }
+        else if (acceleration_unit_vec == backward_vec) {
+            *player_direction = Entity_direction::Backward;
+        }
+        else if (acceleration_unit_vec == backward_left_vec) {
+            *player_direction = Entity_direction::Backward;
+        }
+        else if (acceleration_unit_vec == left_vec) {
+            *player_direction = Entity_direction::Left;
+        }
+        else if (acceleration_unit_vec == forward_left_vec) {
+            *player_direction = Entity_direction::Forward;
+        }
+        else {
+            InvalidCodePath;
+        }
+
+        #if 1
+            if (keyboard->r_pressed) {
+                sim_reg->sim_entities[sim_entity_index].sim_reg_rel = vec2_f32(0.0f, 0.0f);
+            }
+        #endif
+
+        #if 0
+            if (keyboard->left_arrow_pressed) {
+                World_pos player_world_pos = world_pos_from_rel_pos(world, &sim_reg->world_pos, player_high->sim_reg_rel);
+                World_pos sword_world_pos = player_world_pos;
+                sword_world_pos.chunk_rel += vec2_f32(3.0f, 0.0f);
+                spawn_sword(game_state, sword_world_pos);
+            }
+        #endif
+    }
+  
+    
+    Entity_movement_data player_move_data = {};
+    player_move_data.time_elapsed          = time_elapsed;
+    player_move_data.acceleration_unit_vec = acceleration_unit_vec;
+    player_move_data.acceleration_mult     = 225;
+
     move_entity(world, sim_reg, 
-                sim_entity_index, 
-                time_elapsed, acceleration_unit_vec, player_acceleration_mult);
+                sim_entity_index,
+                 &player_move_data);
+
+    DebugStopHere;
 }
 
-#if 0
-void update_familiar(Game_state* game_state, 
-                     U32 familiar_low_index, F32 time_elapsed
+#if 1
+void update_familiar(World* world, Sim_reg* sim_reg, 
+                     U32 sim_entity_index, F32 time_elapsed
 ) {
-    World* world = &game_state->world;
-
-    Low_entity* familiar_low   = &world->low_entities[familiar_low_index];
-    Assert(familiar_low->type == Entity_type::Familiar);
-    Assert(familiar_low->is_also_high);
-    High_entity* familiar_high = &world->high_entities[familiar_low->high_idx];
+    Sim_entity* sim_familiar = &sim_reg->sim_entities[sim_entity_index]; 
+    Assert(sim_familiar->stored_variant.type == Entity_type::Familiar);
+    Assert(sim_familiar->stored_variant.has_entity_to_track);
 
     F32 max_distance = 10.0f;
     F32 min_distance = 3.0f;
     F32 acceleration_mult = 75;
 
-    High_entity* followed_high = &world->high_entities[familiar_low->high_entity_to_track_index];
-    Vec2_F32 diff = followed_high->sim_reg_rel - familiar_high->sim_reg_rel;
+    Stored_to_sim_entity_ref* ref_opt = 
+        get_stored_entity_ref_inside_sim_reg__opt(sim_reg, sim_familiar->stored_variant.stored_entity_to_track_index);
     
+    // NOTE: we expect the entity that the familiar is tracking to be references in the current sim_reg
+    Assert(ref_opt); 
+    
+    Vec2_F32 diff;
+    if (ref_opt->is_sim)
+    {
+        Sim_entity* sim_tracked_entity = &sim_reg->sim_entities[ref_opt->sim_index]; 
+        diff = sim_tracked_entity->sim_reg_rel - sim_familiar->sim_reg_rel; 
+    }
+    else 
+    {   
+        Stored_entity* stored_tracked_entity = &world->stored_entities[ref_opt->stored_index];
+        
+        World_pos* tracked_entity_world_pos = &stored_tracked_entity->world_pos;
+        World_pos sim_familiar_world_pos = 
+            world_pos_from_rel_pos(world, &sim_reg->world_pos, sim_familiar->sim_reg_rel);
+
+        diff = subtract_world_pos(world, tracked_entity_world_pos, &sim_familiar_world_pos);
+    }
+
     if (vec2_f32_len_squared(diff) >= Square(min_distance) &&
         vec2_f32_len_squared(diff) <= Square(max_distance)
     ) {
-        Vec2_F32 acc_unit_vec = diff / vec2_f32_len(diff);
-        move_entity(game_state, familiar_low_index, time_elapsed, acc_unit_vec, acceleration_mult);
+        Entity_movement_data familiar_movement_data = {};
+        familiar_movement_data.time_elapsed          = time_elapsed;
+        familiar_movement_data.acceleration_unit_vec = diff / vec2_f32_len(diff);
+        familiar_movement_data.acceleration_mult     = 100;
+
+        move_entity(world, sim_reg, sim_entity_index, &familiar_movement_data);
     }
     DebugStopHere;
 }
@@ -824,7 +691,8 @@ Sim_reg* start_sim_reg(Arena* world_arena, Arena* frame_arena,
     Sim_reg* new_sim_reg = ArenaPush(frame_arena, Sim_reg);
     new_sim_reg->world_pos             = sim_world_pos;
     new_sim_reg->chunks_from_mid_chunk = chunks_from_mid_chunk;
-    new_sim_reg->sim_entitie_count     = 0;
+
+    new_sim_reg->sim_entitie_count = 0;
 
     Vec2_S32 min_sim_chunk = sim_world_pos.chunk - vec2_s32(chunks_from_mid_chunk);
     Vec2_S32 max_sim_chunk = sim_world_pos.chunk + vec2_s32(chunks_from_mid_chunk);
@@ -850,8 +718,8 @@ Sim_reg* start_sim_reg(Arena* world_arena, Arena* frame_arena,
                      block_stored_index < block->stored_indexes_count; 
                      block_stored_index += 1) 
                 {
-                    U32 world_low_index = block->stored_indexes[block_stored_index];
-                    Stored_entity* stored = &world->stored_entities[world_low_index];
+                    U32 world_stored_index = block->stored_indexes[block_stored_index];
+                    Stored_entity* stored = &world->stored_entities[world_stored_index];
 
                     ///////////////////////////////////////////////////////////
                     // Damian: Converting stored to simulated
@@ -860,19 +728,42 @@ Sim_reg* start_sim_reg(Arena* world_arena, Arena* frame_arena,
                     
                     if (is_world_pos_within_sim_reg(world, new_sim_reg, stored->world_pos)) 
                     {
+                        if (stored->has_entity_to_track) 
+                        {
+                            add_stored_entity_ref_to_sim_reg_if_not_there(frame_arena, 
+                                new_sim_reg, 
+                                stored->stored_entity_to_track_index);
+                        }
+                        
                         Sim_entity* new_sim_entity = &new_sim_reg->sim_entities[new_sim_reg->sim_entitie_count];
                         new_sim_reg->sim_entitie_count += 1;                        
                         
                         new_sim_entity->sim_reg_rel    = sim_reg_rel_from_world_pos(world, new_sim_reg, &stored->world_pos);
                         new_sim_entity->stored_variant = *stored;
-                        new_sim_entity->stored_index   = world_low_index;
-                        
+                        new_sim_entity->stored_index   = world_stored_index;
                     }
 
                 }
             }
 
         }
+    }
+
+    for (U32 sim_entity_index = 0; 
+         sim_entity_index < new_sim_reg->sim_entitie_count; 
+         sim_entity_index += 1
+    ) {
+        Sim_entity* sim = &new_sim_reg->sim_entities[sim_entity_index];
+
+        Stored_to_sim_entity_ref* opt_ref = get_stored_entity_ref_inside_sim_reg__opt(new_sim_reg, sim->stored_index);
+        if (opt_ref)
+        {
+            // NOTE: This mean a sim entity is referenced, need to flag it
+            opt_ref->is_sim    = true;
+            opt_ref->sim_index = sim_entity_index;
+            Assert(opt_ref->stored_index == sim->stored_index);
+        }
+    
     }
 
     return new_sim_reg;
@@ -884,7 +775,14 @@ void end_sim_reg(World* world, Sim_reg* sim_reg)
     for (U32 sim_index = 0; sim_index < sim_reg->sim_entitie_count; sim_index += 1) 
     {
         Sim_entity* sim = &sim_reg->sim_entities[sim_index];
-        
+     
+        if (sim->stored_variant.type == Entity_type::Player)
+        {
+            if ((U32)sim->stored_variant.direction != 0) {
+                DebugStopHere;
+            }
+        } 
+
         Stored_entity new_stored = {};
         new_stored = sim->stored_variant;
         new_stored.world_pos = world_pos_from_rel_pos(world, &sim_reg->world_pos, sim->sim_reg_rel); 
